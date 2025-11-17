@@ -1,6 +1,6 @@
 // ====================================================================
 // app/api/generate/route.ts - Endpoint API para Geração de Política (Next.js)
-// CORREÇÃO: Removida a lógica de inicialização duplicada do Firebase Admin.
+// STATUS: CORRIGIDO. Ajuste nas importações para usar o formConfig.ts.
 // ====================================================================
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -8,25 +8,25 @@ import { GoogleGenAI } from '@google/genai';
 import { v4 as uuidv4 } from 'uuid'; 
 import * as admin from 'firebase-admin'; // Apenas para o tipo FieldValue (serverTimestamp)
 
-// ⭐️ NOVO E CORRIGIDO: Importa a instância do Firestore Admin já inicializada de forma segura
+// ⭐️ Importa a instância do Firestore Admin já inicializada de forma segura
 import { adminDb } from '../../../utils/firebase-admin'; 
 
-// Importação do utils/generatePolicy
-import { FormData, getFormattedDate, SYSTEM_INSTRUCTION } from '../../../utils/generatePolicy'; 
+// 🎯 CORREÇÃO 1: Importa APENAS o TIPO FormData do novo arquivo de configuração (seguro para o cliente)
+import type { FormData } from '../../../utils/formConfig'; 
+
+// 🎯 CORREÇÃO 2: Importa as utilidades de SERVIDOR (getFormattedDate, SYSTEM_INSTRUCTION)
+import { getFormattedDate, SYSTEM_INSTRUCTION } from '../../../utils/generatePolicy'; 
 
 // Garante que a rota use o ambiente Node.js completo para APIs (necessário para o Firebase Admin)
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic'; // Força a requisição dinâmica em produção
 
 // ----------------------------------------------------
-// REMOVIDO: Toda a lógica de normalizePrivateKey, ensureFirebaseAdmin e variáveis locais.
-// Isso agora vive APENAS em utils/firebase-admin.ts
+// FUNÇÕES DE LOG (Logicamente Separadas)
 // ----------------------------------------------------
 
-
 /**
- * Funções de Log: Usa o Admin SDK para salvar o histórico no Firestore.
- * Usa a instância 'adminDb' importada.
+ * Registra os dados da geração da política no Firestore.
  */
 async function logPolicyGeneration(
     sessionId: string, 
@@ -35,7 +35,7 @@ async function logPolicyGeneration(
     userPrompt: string, 
     policyContent: string
 ) {
-    // ⚠️ Checagem do AdminDb, que vem do Singleton (utils/firebase-admin.ts)
+    // Checagem do AdminDb, que vem do Singleton (utils/firebase-admin.ts)
     if (!adminDb) {
         console.warn('Log de política falhou: Firebase Admin DB não está inicializado.');
         return;
@@ -65,21 +65,9 @@ async function logPolicyGeneration(
 // CONSTANTES E SETUP DA API
 // ----------------------------------------------------
 
-// Definição da resposta da API (mantida)
-type Data = {
-  policyContent?: string;
-  error?: string;
-  generatedAt: string;
-};
-
 // Inicializa o cliente Gemini (busca GEMINI_API_KEY do ambiente automaticamente)
 const ai = new GoogleGenAI({});
 
-// ====================================================================
-// DEFINIÇÃO DO PROMPT DE SISTEMA (SYSTEM_INSTRUCTION)
-// ====================================================================
-// Você já tem essa constante no seu utils/generatePolicy, mantendo o padrão:
-// const SYSTEM_INSTRUCTION = `...`; 
 
 // ====================================================================
 // FUNÇÃO POST PRINCIPAL
@@ -87,118 +75,118 @@ const ai = new GoogleGenAI({});
 export async function POST(req: NextRequest) {
     // Captura a data atual formatada antes de qualquer processamento
     const generatedAt = getFormattedDate(new Date());
-    // ⭐️ GERA UM ID DE SESSÃO ÚNICO para uso no log do Firestore
+    // GERA UM ID DE SESSÃO ÚNICO para uso no log do Firestore
     const sessionId = uuidv4(); 
-  
+ 
     try {
-      // 1. Validação do Método
-      if (req.method !== 'POST') {
-        return NextResponse.json({ error: 'Método não permitido.' }, { status: 405 });
-      }
+        // 1. Validação do Método
+        if (req.method !== 'POST') {
+            return NextResponse.json({ error: 'Método não permitido.' }, { status: 405 });
+        }
 
-      // 2. Recebe e parseia o corpo da requisição
-      const formData: FormData = await req.json();
-  
-      // 3. Validação básica
-      if (!formData.nomeDoProjeto || !formData.jurisdicao) {
-        return NextResponse.json(
-          { error: 'Dados obrigatórios ausentes no formulário (Nome do Projeto, Jurisdição).', generatedAt },
-          { status: 400 }
-        );
-      }
-  
-      // EXTRAI O IDIOMA DO FORMULÁRIO E GARANTE UM PADRÃO
-      const idiomaSaida = formData?.idiomaDoDocumento || 'Português (pt-br)';
-  
-  
-      // 4. Cria o prompt do usuário com os dados do formulário
-      const userPrompt = `
+        // 2. Recebe e parseia o corpo da requisição
+        const formData: FormData = await req.json();
+ 
+        // 3. Validação básica
+        if (!formData.nomeDoProjeto || !formData.jurisdicao) {
+            return NextResponse.json(
+                { error: 'Dados obrigatórios ausentes no formulário (Nome do Projeto, Jurisdição).', generatedAt },
+                { status: 400 }
+            );
+        }
+ 
+        // EXTRAI O IDIOMA DO FORMULÁRIO E GARANTE UM PADRÃO
+        const idiomaSaida = formData?.idiomaDoDocumento || 'Português (pt-br)';
+ 
+ 
+        // 4. Cria o prompt do usuário com os dados do formulário
+        const userPrompt = `
 Gere o documento completo contendo a **Política de Privacidade** e os **Termos de Uso**, conforme as instruções do sistema.
 **O idioma de saída DEVE ser: ${idiomaSaida}.**
 Preencha as seções com base nas informações fornecidas abaixo. 
 Se algum campo estiver em branco, use exemplos genéricos consistentes com um serviço SaaS.
 ---
-  
+ 
 ### 📄 Detalhes do Projeto
 - **Data da Última Atualização (Obrigatória):** ${generatedAt || 'Data não informada'}
 - **Nome do Projeto:** ${formData?.nomeDoProjeto || 'Projeto Sem Nome'}
 - **Responsável/Empresa:** ${formData?.nomeDoResponsavel || 'Empresa Genérica Ltda.'}
 - **Tipo de Negócio/Modelo:** SaaS desenvolvido em ${formData?.linguagem || 'TypeScript'}
 - **Jurisdição Principal de Conformidade:** ${formData?.jurisdicao || 'Brasil (LGPD)'}
-  
+ 
 ---
-  
+ 
 ### 🔒 Coleta e Tratamento de Dados
 - **Coleta de Dados Pessoais:** ${formData?.coletaDadosPessoais ? 'SIM' : 'NÃO'}
 - **Coleta de Dados Sensíveis:** ${formData?.coletaDadosSensivel ? 'SIM' : 'NÃO'}
 - **Finalidade/Objetivo da Coleta:** ${formData?.objetivoDaColeta || 'Fornecer e melhorar os serviços prestados.'}
 - **Transferência Internacional de Dados:** ${formData?.paisesTransferencia || 'Não aplicável'}
 - **Público-Alvo:** ${
-          formData?.publicoAlvoCriancas
-            ? 'Inclui crianças; aplicar cláusulas específicas para menores de 13 anos.'
-            : 'Público adulto.'
-        }
-  
+            formData?.publicoAlvoCriancas
+                ? 'Inclui crianças; aplicar cláusulas específicas para menores de 13 anos.'
+                : 'Público adulto.'
+            }
+ 
 ---
-  
+ 
 ### ⚙️ Informações Adicionais
 - **Contato do Encarregado (DPO):** ${formData?.contatoDPO || 'privacidade@exemplo.com'}
 - **Incluir Cláusula de “Não Garantia / AS IS”:** ${formData?.incluirNaoGarantia ? 'SIM' : 'NÃO'}
-  
+ 
 ---
-  
+ 
 ### 🧠 Instruções Gerais
 Use linguagem jurídica formal, clara e acessível.
 **A saída DEVE ser unicamente em ${idiomaSaida}.**
 `;
-  
-      // 5. Chamada real à API Gemini
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: userPrompt,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          temperature: 0.3,
-          maxOutputTokens: 8192, 
-        },
-      });
-  
-      // ⭐️ TRATAMENTO DE SAÍDA:
-      const policyContent = (response.text ?? '').trim();
-  
-      if (!policyContent) {
-        throw new Error('O modelo Gemini não retornou conteúdo. Tente refinar o prompt.');
-      }
-      
-      // ⭐️ LÓGICA DE LOG: Chamada da função de log (usa adminDb do Singleton)
-      await logPolicyGeneration(
-          sessionId,
-          generatedAt,
-          formData,
-          userPrompt,
-          policyContent
-      );
-  
-  
-      // 6. Retorna a política gerada em formato JSON
-      return NextResponse.json({
-        policyContent,
-        generatedAt
-      }, { status: 200 });
-  
+ 
+        // 5. Chamada real à API Gemini
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: userPrompt,
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+                temperature: 0.3,
+                maxOutputTokens: 8192, 
+            },
+        });
+ 
+        // TRATAMENTO DE SAÍDA:
+        const policyContent = (response.text ?? '').trim();
+ 
+        if (!policyContent) {
+            throw new Error('O modelo Gemini não retornou conteúdo. Tente refinar o prompt.');
+        }
+        
+        // LÓGICA DE LOG: Chamada da função de log (usa adminDb do Singleton)
+        await logPolicyGeneration(
+            sessionId,
+            generatedAt,
+            formData,
+            userPrompt,
+            policyContent
+        );
+ 
+ 
+        // 6. Retorna a política gerada em formato JSON
+        return NextResponse.json({
+            policyContent,
+            generatedAt
+        }, { status: 200 });
+ 
     } catch (error) {
-      console.error('Erro na API de geração (Gemini):', error);
-      return NextResponse.json(
-        { error: 'Erro na API Gemini. Verifique a chave (GEMINI_API_KEY) ou o console de logs.', generatedAt },
-        { status: 500 }
-      );
+        console.error('Erro na API de geração (Gemini):', error);
+        return NextResponse.json(
+            { error: 'Erro na API Gemini. Verifique a chave (GEMINI_API_KEY) ou o console de logs.', generatedAt },
+            { status: 500 }
+        );
     }
-  }
+}
 
 // Garante que apenas POST seja o principal método para geração
 export async function GET() {
     return NextResponse.json(
-      { error: 'Method Not Allowed. Use POST para gerar a política.' },
-      { status: 405 }
+        { error: 'Method Not Allowed. Use POST para gerar a política.' },
+        { status: 405 }
     );
 }

@@ -1,7 +1,32 @@
+// utils/firestore.ts (CORRIGIDO)
+
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
-import { getFirestore, Firestore, setLogLevel, doc, collection, query, where, getDocs, QuerySnapshot, DocumentData, orderBy, limit, addDoc, setDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
+// 🚨 CORREÇÃO: Removida a linha de importação duplicada de DocumentData e QuerySnapshot
+import { 
+    getFirestore, 
+    Firestore, 
+    setLogLevel, 
+    doc, 
+    collection, 
+    query, 
+    where, 
+    getDocs, 
+    QuerySnapshot, // Importa o tipo
+    DocumentData, // Importa o tipo
+    orderBy, 
+    limit, 
+    addDoc, 
+    setDoc, 
+    deleteDoc, 
+    getDoc, 
+    serverTimestamp,
+    Timestamp // Importa o tipo Timestamp
+} from 'firebase/firestore';
+
+// Importa o tipo do formulário que definimos (para estruturar o histórico)
+import type { FormData } from './formConfig'; // ⭐️ Use 'type' para garantir que não haja código cliente desnecessário
 // Ativa o log de debug do Firestore (útil para desenvolvimento)
 setLogLevel('debug');
 
@@ -119,7 +144,15 @@ export const getPublicPolicyCollectionRef = () => {
 }
 
 // Re-exporta tipos importantes (opcional)
-export type PolicyDocument = DocumentData;
+export type PolicyDocument = DocumentData & {
+    id: string; // ID do documento no Firestore
+    type: 'draft' | 'policy'; // Tipo de documento
+    data: FormData; // Os dados do formulário
+    policyContent: string; // O snippet ou o conteúdo completo
+    generatedAt: string; // Data de geração da IA
+    createdAt: Timestamp; // Timestamp do servidor (para ordenação)
+    prompt?: string; // Prompt usado para gerar (opcional)
+};
 export type PoliciesSnapshot = QuerySnapshot<DocumentData>;
 
 // -------------------------------------------------------------

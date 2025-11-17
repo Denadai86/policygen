@@ -24,20 +24,21 @@ import {
 } from 'lucide-react';
 
 // Importação da tipagem e funções utilitárias do FORM
-import type { FormData } from '../utils/generatePolicy';
-import type { PolicyDocument } from '../utils/firestore';
+import type { FormData } from '../utils/formConfig'; // MUDANÇA AQUI
+
 import { 
     languageOptions, 
     idiomOptions, 
     getIdiomaLabel,
     jurisdictionOptions, 
     getJurisdicaoLabel
-} from '../utils/generatePolicy';
+} from '../utils/formConfig'; // MUDANÇA AQUI
 
 // Importação das funções e hooks do FIREBASE/FIRESTORE
 import { useAuth } from '../utils/firebase'; // Hook para autenticação
 import { 
     loadDraft,
+    PolicyDocument,
     saveDraft,
     savePolicy,
     getPoliciesHistory,
@@ -81,22 +82,29 @@ const STEP_TITLES = {
 };
 
 const EMPTY_FORM_DATA: FormData = {
-    nomeDoProjeto: '', 
+    // ⬅️ CORRIGIDO: Adicionar a propriedade 'type'
+    type: 'privacy-policy', 
+    nomeDoProjeto: '',
     nomeDoResponsavel: '',
-    jurisdicao: 'Brasil', 
-    linguagem: languageOptions[0].value, 
-    idiomaDoDocumento: 'pt-br', 
-    licencaCodigo: 'MIT', 
-    modeloSoftware: 'SAAS', 
-    tipoMonetizacao: 'FREEMIUM',
+    jurisdicao: 'Brasil (LGPD)', // Mantém um padrão útil
+    linguagem: languageOptions[0].value,
+    idiomaDoDocumento: idiomOptions[0].value,
+
+    // Outras propriedades adicionadas em utils/formConfig.ts:
+    licencaCodigo: '', // Se for string
+    modeloSoftware: '', // Se for string
+    tipoMonetizacao: '', // Se for string
+
+    // Propriedades booleanas/textuais
     objetivoDaColeta: '',
+    paisesTransferencia: '',
+    
     coletaDadosPessoais: true,
     coletaDadosSensivel: false,
-    monetizacaoPorTerceiros: false,
+    monetizacaoPorTerceiros: false, // Adicionado no passo anterior
     publicoAlvoCriancas: false,
     incluirNaoGarantia: true,
-    contatoDPO: '', 
-    paisesTransferencia: '',
+    contatoDPO: '',
 };
 
 // --- 2. COMPONENTES DE CAMPO AUXILIARES (Mantidos - Omitidos para brevidade no corpo da resposta, mas presentes no arquivo real) ---
@@ -131,7 +139,7 @@ export default function PolicyGenPage() {
         try {
             const historyData = await getPoliciesHistory(uid) as PolicyDocument[];
             // Ordena o histórico pelo mais recente
-            historyData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            historyData.sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()); // LINHA CORRIGIDA
             setHistory(historyData);
         } catch (e) {
             console.error("Erro ao buscar histórico:", e);
@@ -538,7 +546,9 @@ export default function PolicyGenPage() {
                                             <p className="font-semibold truncate text-white">
                                                 {doc.type === 'draft' ? 'Rascunho' : 'Política Gerada'}: {doc.data.nomeDoProjeto || 'Projeto Sem Nome'}
                                             </p>
-                                            <p className="text-xs text-gray-400">Salvo em: {new Date(doc.createdAt).toLocaleString()}</p>
+                                            <p className="text-xs text-gray-400">
+                                                Salvo em: {doc.createdAt.toDate().toLocaleString()}
+                                            </p>
                                         </div>
                                         <div className='flex space-x-2 ml-4'>
                                             <button 

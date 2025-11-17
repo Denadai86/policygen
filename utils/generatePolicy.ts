@@ -1,174 +1,51 @@
 // ====================================================================
-// app/api/generate/route.ts - Endpoint API para Geração de Política (Next.js)
-// STATUS: CORRIGIDO. Importação de SYSTEM_INSTRUCTION e uso do Singleton Admin.
+// utils/generatePolicy.ts - INSTRUÇÕES DE SISTEMA e UTILIDADES (SERVER-SIDE)
+// 🚨 CRÍTICO: Usa 'server-only' para prevenir bundling no lado do cliente 🚨
 // ====================================================================
 
-import { NextResponse, type NextRequest } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
-import { v4 as uuidv4 } from 'uuid'; 
-import * as admin from 'firebase-admin'; // Apenas para o tipo FieldValue (serverTimestamp)
+import 'server-only'; // ⭐️ Esta linha resolve o erro 'Module not found: Can't resolve fs'
 
-// ⭐️ Importa a instância do Firestore Admin já inicializada de forma segura
-import { adminDb } from '../../../utils/firebase-admin'; 
+// Importa apenas o tipo de dados do formulário (o tipo é seguro)
+import type { FormData } from './formConfig'; // ⬅️ ASSUMIMOS QUE VOCÊ SEPAROU EM formConfig.ts
 
-// ✅ CORRIGIDO: Importa todas as utilidades, incluindo SYSTEM_INSTRUCTION
-import { FormData, getFormattedDate, SYSTEM_INSTRUCTION } from '../../../utils/generatePolicy'; 
-
-// Garante que a rota use o ambiente Node.js completo para APIs
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic'; 
 
 // ----------------------------------------------------
-// FUNÇÕES DE LOG (Logicamente Separadas)
+// 1. FUNÇÕES UTILITÁRIAS (Apenas Server-Side)
 // ----------------------------------------------------
 
 /**
- * Registra os dados da geração da política no Firestore.
+ * Formata a data atual para exibição em Português.
  */
-async function logPolicyGeneration(
-    sessionId: string, 
-    generatedAt: string,
-    formData: FormData, 
-    userPrompt: string, 
-    policyContent: string
-) {
-    if (!adminDb) {
-        console.warn('Log de política falhou: Firebase Admin DB não está inicializado.');
-        return;
-    }
-    
-    // Simula um "ID de Usuário" (usar ID real de Auth posteriormente)
-    const userId = sessionId; 
-    
-    try {
-        const docRef = await adminDb.collection(`users/${userId}/history`).add({
-            type: formData.type, 
-            data: formData,
-            policyContent: policyContent.substring(0, 500) + '...', // Salva snippet para resumo
-            generatedAt: generatedAt,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(), 
-            prompt: userPrompt,
-        });
-        console.log(`✅ Log de política salvo no Firestore (Admin): ID ${docRef.id}`);
-    } catch (e) {
-        console.error('❌ Erro ao salvar log no Firestore (Admin):', e);
-    }
+export function getFormattedDate(date: Date = new Date()): string {
+    const options: Intl.DateTimeFormatOptions = { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    };
+    // É seguro usar 'pt-BR' aqui, pois esta função só é chamada no servidor (Route Handler)
+    return date.toLocaleDateString('pt-BR', options);
 }
 
 // ----------------------------------------------------
-// SETUP DA API
+// 2. PROMPT DE SISTEMA PARA IA
 // ----------------------------------------------------
-const ai = new GoogleGenAI({});
 
-// ====================================================================
-// FUNÇÃO POST PRINCIPAL
-// ====================================================================
-export async function POST(req: NextRequest) {
-    const generatedAt = getFormattedDate(new Date());
-    const sessionId = uuidv4(); 
-  
-    try {
-      if (req.method !== 'POST') {
-        return NextResponse.json({ error: 'Método não permitido.' }, { status: 405 });
-      }
+export const SYSTEM_INSTRUCTION = `
+Você é um **Especialista em Documentos Legais** especializado em **Softwares, SaaS e Plataformas Digitais**.
+Sua tarefa é gerar uma Política de Privacidade e Termos de Uso coesos e bem estruturados, seguindo o formato e as regras especificadas abaixo.
+Seu foco é na **clareza**, **conformidade** (especialmente com a legislação de jurisdição principal informada) e **linguagem acessível**.
+Você DEVE gerar o documento completo em formato Markdown, com títulos claros (###) e listas.
 
-      const formData: FormData = await req.json();
-  
-      if (!formData.nomeDoProjeto || !formData.jurisdicao) {
-        return NextResponse.json(
-          { error: 'Dados obrigatórios ausentes no formulário (Nome do Projeto, Jurisdição).', generatedAt },
-          { status: 400 }
-        );
-      }
-  
-      const idiomaSaida = formData?.idiomaDoDocumento || 'Português (pt-br)';
-  
-      // 4. Cria o prompt do usuário
-      const userPrompt = `
-Gere o documento completo contendo a **Política de Privacidade** e os **Termos de Uso**, conforme as instruções do sistema.
-**O idioma de saída DEVE ser: ${idiomaSaida}.**
-Preencha as seções com base nas informações fornecidas abaixo. 
-Se algum campo estiver em branco, use exemplos genéricos consistentes com um serviço SaaS.
----
-  
-### 📄 Detalhes do Projeto
-- **Data da Última Atualização (Obrigatória):** ${generatedAt || 'Data não informada'}
-- **Nome do Projeto:** ${formData?.nomeDoProjeto || 'Projeto Sem Nome'}
-- **Responsável/Empresa:** ${formData?.nomeDoResponsavel || 'Empresa Genérica Ltda.'}
-- **Tipo de Negócio/Modelo:** SaaS desenvolvido em ${formData?.linguagem || 'TypeScript'}
-- **Jurisdição Principal de Conformidade:** ${formData?.jurisdicao || 'Brasil (LGPD)'}
-  
----
-  
-### 🔒 Coleta e Tratamento de Dados
-- **Coleta de Dados Pessoais:** ${formData?.coletaDadosPessoais ? 'SIM' : 'NÃO'}
-- **Coleta de Dados Sensíveis:** ${formData?.coletaDadosSensivel ? 'SIM' : 'NÃO'}
-- **Finalidade/Objetivo da Coleta:** ${formData?.objetivoDaColeta || 'Fornecer e melhorar os serviços prestados.'}
-- **Transferência Internacional de Dados:** ${formData?.paisesTransferencia || 'Não aplicável'}
-- **Público-Alvo:** ${
-          formData?.publicoAlvoCriancas
-            ? 'Inclui crianças; aplicar cláusulas específicas para menores de 13 anos.'
-            : 'Público adulto.'
-        }
-  
----
-  
-### ⚙️ Informações Adicionais
-- **Contato do Encarregado (DPO):** ${formData?.contatoDPO || 'privacidade@exemplo.com'}
-- **Incluir Cláusula de “Não Garantia / AS IS”:** ${formData?.incluirNaoGarantia ? 'SIM' : 'NÃO'}
-  
----
-  
-### 🧠 Instruções Gerais
-Use linguagem jurídica formal, clara e acessível.
-**A saída DEVE ser unicamente em ${idiomaSaida}.**
+### Formato e Regras de Saída
+1.  **Estrutura:** O documento DEVE conter APENAS o texto da Política de Privacidade e Termos de Uso.
+2.  **Identificação:** Inclua no topo o título "POLÍTICA DE PRIVACIDADE E TERMOS DE USO".
+3.  **Atualização:** A seção inicial DEVE conter a "Data da Última Atualização" conforme fornecida.
+4.  **Conteúdo:** Use as informações do usuário (Nome do Projeto, Responsável, etc.) para personalizar o máximo possível.
+5.  **Rejeição:** Se o prompt do usuário for inadequado ou perigoso, retorne uma mensagem de erro clara em português, *mas o foco é na geração*.
+6.  **Linguagem:** Use a linguagem jurídica formal, clara e acessível, sempre no idioma de saída solicitado.
 `;
-  
-      // 5. Chamada real à API Gemini
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: userPrompt,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION, 
-          temperature: 0.3,
-          maxOutputTokens: 8192, 
-        },
-      });
-  
-      const policyContent = (response.text ?? '').trim();
-  
-      if (!policyContent) {
-        throw new Error('O modelo Gemini não retornou conteúdo. Tente refinar o prompt.');
-      }
-      
-      // 6. LÓGICA DE LOG
-      await logPolicyGeneration(
-          sessionId,
-          generatedAt,
-          formData,
-          userPrompt,
-          policyContent
-      );
-  
-      // 7. Retorna a política gerada
-      return NextResponse.json({
-        policyContent,
-        generatedAt
-      }, { status: 200 });
-  
-    } catch (error) {
-      console.error('Erro na API de geração (Gemini):', error);
-      return NextResponse.json(
-        { error: 'Erro na API Gemini. Verifique a chave (GEMINI_API_KEY) ou o console de logs.', generatedAt },
-        { status: 500 }
-      );
-    }
-  }
 
-// Método GET não permitido
-export async function GET() {
-    return NextResponse.json(
-      { error: 'Method Not Allowed. Use POST para gerar a política.' },
-      { status: 405 }
-    );
-}
+// ----------------------------------------------------
+// 3. RE-EXPORT DE TIPAGEM (Para uso no Route Handler)
+// ----------------------------------------------------
+export type { FormData }; // Re-exporta o tipo para uso do Route Handler
