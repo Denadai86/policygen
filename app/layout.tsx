@@ -1,17 +1,18 @@
 // ===================================================================
 // app/layout.tsx - LAYOUT PRINCIPAL (Server Component)
-// CORREÇÃO: Implementação Otimizada do Google AdSense (Ad Unit Manual)
+// STATUS: AdSense implementado com Ad Unit Manual + Correção de Build (Tailwind CSS)
 // ===================================================================
 
 import type { Metadata } from "next";
-import Script from 'next/script'; // Importa o componente Script para carregar externos
+import Script from 'next/script'; // Componente Next.js para carregar scripts externos
 import { Geist, Geist_Mono } from "next/font/google"; // Importação das fontes
 import Header from './components/Header'; // Seu componente Header
-import "tailwindcss/tailwind.css"; // Se você usa o Next.js v14, isso deve ser em globals.css
-import "./globals.css"; // Importação global de CSS e Tailwind
+
+// ✅ CORREÇÃO DE BUILD: Importação do CSS Global (Contém as diretivas @tailwind)
+import "./globals.css"; 
 
 // ------------------------------------------------------------
-// CONSTANTES DE CONFIGURAÇÃO (Variáveis públicas ou constantes)
+// CONSTANTES DE CONFIGURAÇÃO 
 // ------------------------------------------------------------
 
 // Seu ID de Publicador do AdSense
@@ -67,11 +68,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // Define o idioma principal e aplica as variáveis das fontes
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable}`}>
       
       {/* 1. Script principal do AdSense para ativar os Anúncios Automáticos */}
-      {/* Utilizamos o next/script com 'afterInteractive' para priorizar o LCP/performance */}
       <Script
         async
         src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_PUB_ID}`}
@@ -82,29 +81,25 @@ export default function RootLayout({
       {/* Estrutura de corpo */}
       <body className="antialiased min-h-screen flex flex-col bg-gray-50 text-gray-900">
 
-        {/* HEADER - componente cliente que encolhe ao rolar */}
         <Header />
 
         {/* CONTEÚDO PRINCIPAL */}
         <main className="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
           
-          {/* ⭐️ INÍCIO DA UNIDADE DE ANÚNCIO MANUAL (AdSense Slot) ⭐️ */}
-          {/* Este bloco força o AdSense a renderizar, resolvendo o problema de ads não aparecerem. */}
-          {/* Adicionamos uma altura mínima para evitar o CLS (Cumulative Layout Shift) */}
+          {/* ⭐️ UNIDADE DE ANÚNCIO MANUAL (AdSense Slot) ⭐️ */}
+          {/* Esta é a implementação da sua Ad Unit manual para forçar a exibição de anúncios. */}
           <div className="my-8 flex justify-center w-full min-h-[100px] sm:min-h-[150px] lg:min-h-[200px] bg-gray-100/50 rounded-lg">
             
-            {/* O elemento INS do Google AdSense. */}
             <ins 
               className="adsbygoogle"
-              style={{ display: 'block', width: '100%', height: '100%' }} // Estilo para ocupar o div pai
+              style={{ display: 'block', width: '100%', height: '100%' }}
               data-ad-client={ADSENSE_PUB_ID}
-              data-ad-slot={ADSENSE_SLOT_ID} // USANDO O SLOT QUE VOCÊ FORNECEU
+              data-ad-slot={ADSENSE_SLOT_ID} // 8590355353
               data-ad-format="auto"
               data-full-width-responsive="true"
             ></ins>
             
-            {/* O Script que empurra a Ad Unit para ser renderizada. */}
-            {/* O ID aqui é uma boa prática para o Next.js evitar conflitos de re-hidratação. */}
+            {/* Script de inicialização da Ad Unit */}
             <Script id="ads-header-init">
               {`(window.adsbygoogle = window.adsbygoogle || []).push({});`}
             </Script>

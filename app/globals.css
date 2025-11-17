@@ -1,5 +1,12 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* * Você pode ter mais CSS personalizado abaixo,
+* mas as diretivas @tailwind são obrigatórias 
+* e devem estar APENAS neste arquivo.
+*/
 :root {
   --background: #ffffff;
   --foreground: #171717;
