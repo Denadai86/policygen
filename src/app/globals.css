@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- BASE LAYER ---------- */
+@layer base {
+  :root {
+    --c-neon-cyan: #00e5ff;
+    --c-neon-blue: #56ccf2;
+    --bg-dark-1: #03060a;
+    --bg-dark-2: #0a0c12;
+    --text-gray: #cfd6e6;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(ellipse at top left, rgba(0,30,30,0.15), transparent 20%),
+      var(--bg-dark-1);
+    color: var(--text-gray);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.55;
+  }
+}
+
+/* ---------- COMPONENTS LAYER ---------- */
+@layer components {
+  .card {
+    @apply rounded-2xl p-6 bg-black/40 border border-white/5 mb-6;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  }
+
+  .mini-card {
+    @apply bg-white/5 border border-white/10 rounded-lg p-4; /* <-- FIX AQUI */
+    box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+  }
+
+  .btn-primary {
+    @apply inline-block bg-cyan-500 text-black font-semibold px-4 py-2 rounded-lg transition;
+  }
+
+  .btn-ghost {
+    @apply inline-block border border-white/10 text-gray-200 px-3 py-1.5 rounded-md hover:bg-white/5;
+  }
+
+  .magic-switch {
+    @apply relative w-14 h-8 rounded-full transition-all duration-200;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .magic-switch[data-checked="true"] {
+    background: linear-gradient(90deg, rgba(6,230,230,0.14), rgba(0,200,200,0.18));
+    box-shadow: 0 0 12px rgba(0,229,255,0.12), inset 0 0 6px rgba(255,255,255,0.02);
+  }
+
+  .magic-switch .dot {
+    @apply absolute top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-white transition-all duration-200 shadow;
+    left: 6px;
+  }
+
+  .magic-switch[data-checked="true"] .dot {
+    left: calc(100% - 6px - 1.5rem);
+  }
+}
+
+/* ---------- EXTRA UTILITIES ---------- */
+@layer utilities {
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-dark-2); }
+  ::-webkit-scrollbar-thumb { background: var(--c-neon-blue); border-radius: 6px; }
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (min-width: 768px) {
+  .card { padding: 2rem; }
+  .mini-card { padding: 1.25rem; }
+}
