@@ -1,6 +1,8 @@
+// src/data/languages.ts
 export const languages = [
-  { label: "Português (pt-br)", value: "pt-br" },
-  { label: "Inglês (en)", value: "en" },
-  { label: "Espanhol (es)", value: "es" },
-  { label: "Francês (fr)", value: "fr" },
+  { value: "pt-br", label: "Português (Brasil)" },
+  { value: "en", label: "English (US/Global)" },
+  { value: "es", label: "Español" },
+  { value: "fr", label: "Français" },
+  { value: "pt", label: "Português (Portugal)" },
 ];

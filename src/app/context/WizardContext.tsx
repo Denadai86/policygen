@@ -1,18 +1,19 @@
-//src/app/context/WizardContext.tsx
-
 "use client";
 
 import { createContext, useContext, useState, ReactNode } from "react";
 
 // =======================================================
-// MODELO ENTERPRISE COMPLETO (OPÇÃO 2 EXPANDIDA)
+// TIPOS AUXILIARES EXPORTADOS
+// (Outros arquivos podem importar isso agora!)
 // =======================================================
 
 export type RetentionPeriod = "30d" | "6m" | "1y" | "2y" | "custom";
 export type SecurityLevel = "basic" | "standard" | "advanced";
 export type ConsentMode = "explicit" | "implicit" | "cmp";
+export type Jurisdiction = "br" | "us" | "eu"; // Extraído para reutilização
+export type Language = "pt-br" | "pt" | "en" | "es" | "fr"; // Extraído para reutilização
 
-// CATEGORIAS COMPLETAS DE COOKIES — ALINHADAS COM O STEP-5
+// CATEGORIAS COMPLETAS DE COOKIES
 export interface CookieCategories {
   essential: boolean;
   functional: boolean;
@@ -23,7 +24,9 @@ export interface CookieCategories {
   ads: boolean;
 }
 
-// MODELO ENTERPRISE FINAL DE TODO O FLUXO
+// =======================================================
+// MODELO ENTERPRISE FINAL (A Fonte da Verdade)
+// =======================================================
 export interface WizardData {
   // Identificação / Projeto
   projectName: string;
@@ -47,8 +50,9 @@ export interface WizardData {
   purpose?: string;
   transferCountries?: string;
 
-  jurisdiction?: "br" | "us" | "eu";
-  language?: "pt-br" | "pt" | "en" | "es" | "fr";
+  // AQUI ESTÁ A CORREÇÃO CRÍTICA DO BUILD: "us" incluído
+  jurisdiction?: Jurisdiction; 
+  language?: Language;
 
   includeAsIs?: boolean;
   includeIP?: boolean;
@@ -57,7 +61,7 @@ export interface WizardData {
   requireConsent?: boolean;
 
   // ============================================
-  // STEP 5 EXPANDIDO
+  // STEP 5 - COOKIES & RASTREAMENTO
   // ============================================
   usesCookies?: boolean;
 
@@ -81,10 +85,13 @@ export interface WizardData {
 }
 
 // =======================================================
-// DEFAULTS SEGUROS (PARA NÃO EXISTIR undefined NO STEP-6)
+// DEFAULTS SEGUROS
 // =======================================================
 
 const initialWizardData: Partial<WizardData> = {
+  jurisdiction: "br", // Valor padrão seguro
+  language: "pt-br",  // Valor padrão seguro
+  
   cookieCategories: {
     essential: true,
     functional: false,
@@ -120,7 +127,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<Partial<WizardData>>(initialWizardData);
 
   const update = (values: Partial<WizardData>) =>
-    setData(prev => ({ ...prev, ...values }));
+    setData((prev) => ({ ...prev, ...values }));
 
   const reset = () => setData(initialWizardData);
 

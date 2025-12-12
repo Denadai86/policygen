@@ -5,7 +5,7 @@ import React, { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWizard } from "@/app/context/WizardContext";
 
-import { Building2, Globe, IdCard, Mail, Type } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Building2, Globe, IdCard, Mail, Type } from "lucide-react";
 
 type FormState = {
   projectName: string;
@@ -154,27 +154,24 @@ export default function Step2() {
       </div>
 
       {/* Footer */}
-      <div className="border-t border-white/10 bg-black/40 backdrop-blur-xl px-6 py-5 fixed bottom-0 w-full">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-sm text-gray-400">
-            Revise e continue para personalizar seus documentos.
-            {!form.projectName.trim() && (
-              <span className="ml-2 text-red-400">• Nome do projeto é obrigatório</span>
-            )}
-          </div>
+<div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+          
+          {/* BOTÃO VOLTAR (Novo) */}
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 hover:border-white/20 transition-all flex items-center gap-2 font-medium"
+          >
+            <ArrowLeft size={18} />
+            Voltar
+          </button>
 
+          {/* BOTÃO AVANÇAR */}
           <button
             onClick={nextStep}
-            disabled={!form.projectName.trim()}
-            className={`
-              px-10 py-4 rounded-xl font-bold text-lg uppercase tracking-wider transition-all duration-300
-              ${!form.projectName.trim()
-                ? "bg-gray-800 text-gray-500 cursor-not-allowed"
-                : "bg-cyan-500 hover:bg-cyan-400 text-black shadow-xl hover:shadow-2xl hover:shadow-cyan-500/40 transform hover:-translate-y-1"
-              }
-            `}
+            className="px-8 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] transition-all flex items-center gap-2"
           >
-            Continuar → Personalizar
+            Próximo <ArrowRight size={18} />
           </button>
         </div>
       </div>

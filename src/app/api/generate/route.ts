@@ -1,3 +1,4 @@
+// app/api/generate/route.ts
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
@@ -22,10 +23,20 @@ export async function POST(req: Request) {
 
     const { answers } = validation.data;
 
+    // --- CORREÇÃO 1: DATAS REAIS ---
+    // Cria a data formatada (ex: "12 de dezembro de 2025")
+    const today = new Date().toLocaleDateString("pt-BR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    });
+
+    // Injeta a data no objeto de respostas para a IA ler
+    answers.currentDate = today;
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
-      // Forçamos JSON, mas vamos garantir a limpeza manual também
+      model: "gemini-1.5-flash",
       generationConfig: { responseMimeType: "application/json" } 
     });
 
@@ -33,11 +44,16 @@ export async function POST(req: Request) {
       Você é um gerador de documentos jurídicos (Legal Tech).
       Gere 3 documentos baseados nos dados: ${JSON.stringify(answers)}
 
-      REGRAS CRÍTICAS DE SAÍDA:
+      REGRAS CRÍTICAS:
       1. Retorne APENAS um objeto JSON válido.
-      2. NÃO use Markdown (sem \`\`\`json ou \`\`\`).
-      3. As chaves DEVEM ser exatas: "privacyPolicy", "termsOfUse", "cookiePolicy".
+      2. NÃO use Markdown no JSON.
+      3. As chaves DEVEM ser: "privacyPolicy", "termsOfUse", "cookiePolicy".
       
+      IMPORTANTE SOBRE DATAS:
+      - A data de hoje é: "${today}".
+      - SEMPRE substitua placeholders como [DATA], [DATE] ou "Data Atual" por "${today}".
+      - No final dos documentos, coloque: "Última atualização: ${today}".
+
       Estrutura do JSON:
       {
         "privacyPolicy": "# Política de Privacidade\n\nTexto aqui...",
@@ -51,29 +67,11 @@ export async function POST(req: Request) {
     const response = await result.response;
     let text = response.text();
 
-    console.log("🔍 TEXTO ORIGINAL DO GEMINI (Primeiros 100 chars):", text.substring(0, 100));
-
-    // --- LIMPEZA DE SEGURANÇA ---
-    // Remove blocos de código markdown se o Gemini insistir em mandá-los
+    // Limpeza de segurança
     text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
-    // Tenta fazer o parse
-    let documents;
-    try {
-      documents = JSON.parse(text);
-    } catch (e) {
-      console.error("❌ Erro ao fazer parse do JSON:", e);
-      console.error("Conteúdo problemático:", text);
-      return NextResponse.json({ error: "A IA retornou um formato inválido (Parse Error)." }, { status: 500 });
-    }
+    const documents = JSON.parse(text);
 
-    // Validação final das chaves
-    if (!documents.privacyPolicy && !documents.termsOfUse) {
-       console.error("❌ JSON válido, mas chaves erradas:", Object.keys(documents));
-       return NextResponse.json({ error: "A IA não gerou as chaves corretas." }, { status: 500 });
-    }
-
-    console.log("✅ Sucesso! Enviando para o front.");
     return NextResponse.json({ documents });
 
   } catch (error: any) {
