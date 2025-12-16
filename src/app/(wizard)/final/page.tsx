@@ -1,138 +1,182 @@
 // src/app/(wizard)/final/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useWizard } from "../../context/WizardContext";
-import { useRouter } from "next/navigation";
-import { saveToGist } from "@/app/actions/github"; // Import da Action
+import { useRouter, useSearchParams } from "next/navigation";
+import { saveToGist } from "@/app/actions/github";
+import { auth } from "@/lib/firebase"; 
+import { createProject, updateProject } from "@/lib/db"; // Importamos o updateProject
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { 
-  Sparkles, Loader2, Download, ShieldCheck, 
-  FileText, ArrowLeft, CheckCircle, Github, Copy, Check
+  Sparkles, Loader2, Download, 
+  ArrowLeft, CheckCircle, Copy, Check, Save, LogIn, RefreshCw
 } from "lucide-react";
 
-// Tipagem exata do que vem do backend
+
+// Ícone do GitHub feito na mão para substituir o da biblioteca
+function GithubIcon({ size = 20, className = "" }: { size?: number, className?: string }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className}
+    >
+      <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/>
+      <path d="M9 18c-4.51 2-5-2-7-2"/>
+    </svg>
+  );
+}
+
+
+
+
+// Tipos locais
 type GeneratedDocs = {
   privacyPolicy: string;
   termsOfUse: string;
   cookiePolicy: string;
 };
-
 type ActiveTab = keyof GeneratedDocs;
 
-export default function FinalPage() {
+function FinalPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data } = useWizard();
 
-  // Estados de Interface
+  // Estados
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
   
-  // Estados dos Dados
+  // Controle de Projeto
+  // Tenta pegar da URL (fluxo de edição) ou do estado local (fluxo de criação novo)
+  const urlProjectId = searchParams.get("projectId");
+  const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
+  
+  const activeProjectId = urlProjectId || savedProjectId;
+
+  // Docs
   const [docs, setDocs] = useState<GeneratedDocs | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab | null>(null);
 
-  // Estados de Feedback (Loading botões específicos)
+  // Feedback visual
   const [isSavingGist, setIsSavingGist] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // ===========================================
-  // 1. LÓGICA DE GERAÇÃO (API)
-  // ===========================================
+  // 1. Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Login
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      alert("Erro no login");
+    }
+  };
+
+  // 3. SALVAR OU ATUALIZAR (A Lógica de Ouro) 🏆
+  const handleSaveOrUpdate = async () => {
+    if (!user || !data) return;
+    setIsSavingProject(true);
+
+    let result;
+
+    if (activeProjectId) {
+      // MODO EDIÇÃO: Atualiza o existente
+      result = await updateProject(activeProjectId, data);
+      if (result.success) {
+        alert("Projeto atualizado com sucesso! Dados sincronizados.");
+      }
+    } else {
+      // MODO CRIAÇÃO: Cria um novo
+      result = await createProject(user.uid, data);
+      if (result.success && result.projectId) {
+        setSavedProjectId(result.projectId);
+        alert("Novo projeto criado e salvo no Dashboard!");
+      }
+    }
+
+    if (!result.success) {
+      alert("Erro ao salvar: " + result.error);
+    }
+    
+    setIsSavingProject(false);
+  };
+
+  // 4. Geração (Simulada ou Real)
   const generate = async () => {
     setLoading(true);
     setError(null);
     setDocs(null);
-
     try {
-      console.log("📤 Enviando payload:", { answers: data });
-
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: data }), // Formato correto para o Zod
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json.error || "Falha ao comunicar com a IA.");
-      }
-
-      if (json.documents) {
-        setDocs(json.documents);
-        setActiveTab("privacyPolicy"); // Seleciona a primeira aba
-      } else {
-        throw new Error("A IA não retornou os documentos no formato esperado.");
-      }
-
+        const res = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: data }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Erro na IA");
+        
+        if (json.documents) {
+            setDocs(json.documents);
+            setActiveTab("privacyPolicy");
+        }
     } catch (err: any) {
-      console.error("❌ Erro no front:", err);
-      setError(err.message || "Ocorreu um erro desconhecido.");
+        setError(err.message);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
-  // ===========================================
-  // 2. UTILITÁRIOS (Download, Copy, Gist)
-  // ===========================================
-  
+  // Utilitários de Download/Copy (Iguais ao anterior)
   const downloadFile = (content: string, filename: string) => {
-    if (!content) return;
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+      const blob = new Blob([content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
   };
-
+  
   const downloadAll = () => {
-    if (!docs) return;
-    // Download com delay sequencial para evitar bloqueio do browser
-    const queue = [
-      { content: docs.privacyPolicy, name: "Politica_Privacidade.md" },
-      { content: docs.termsOfUse, name: "Termos_de_Uso.md" },
-      { content: docs.cookiePolicy, name: "Politica_Cookies.md" }
-    ];
-
-    queue.forEach((item, index) => {
-      setTimeout(() => downloadFile(item.content, item.name), index * 800);
-    });
+      if(!docs) return;
+      downloadFile(docs.privacyPolicy, "Privacy.md");
+      downloadFile(docs.termsOfUse, "Terms.md");
+      downloadFile(docs.cookiePolicy, "Cookies.md");
   };
 
   const copyToClipboard = () => {
-    if (!docs || !activeTab) return;
-    const text = docs[activeTab];
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+      if (!docs || !activeTab) return;
+      navigator.clipboard.writeText(docs[activeTab]);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
   };
-
+  
   const handleSaveGist = async () => {
-    if (!docs || !activeTab) return;
-    setIsSavingGist(true);
-
-    try {
-      // Se você ainda não criou a action, isso vai falhar graciosamente
-      const filename = `${activeTab}.md`;
-      const result = await saveToGist(filename, docs[activeTab]);
-
-      if (result.success && result.url) {
-        window.open(result.url, "_blank");
-      } else {
-        alert("Erro ao salvar: " + (result.error || "Verifique o token do GitHub"));
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao conectar com GitHub. Verifique se o Token está no .env.local");
-    } finally {
-      setIsSavingGist(false);
-    }
+       if (!docs || !activeTab) return;
+       setIsSavingGist(true);
+       try {
+           const result = await saveToGist(`${activeTab}.md`, docs[activeTab]);
+           if (result.success && result.url) window.open(result.url, "_blank");
+           else alert("Erro Gist: " + result.error);
+       } catch(e) { alert("Erro Gist"); }
+       setIsSavingGist(false);
   };
 
-  // Mapeamento de nomes amigáveis
   const tabNames: Record<string, string> = {
     privacyPolicy: "Privacidade",
     termsOfUse: "Termos de Uso",
@@ -142,187 +186,138 @@ export default function FinalPage() {
   return (
     <div className="max-w-6xl mx-auto pt-16 pb-24 px-6 relative min-h-screen flex flex-col">
        
-       {/* MARCA D'ÁGUA BACKGROUND */}
-       <div className="pointer-events-none absolute inset-0 flex justify-center overflow-hidden z-0">
-        <div className="text-[100px] md:text-[200px] font-title text-cyan-500/5 tracking-widest select-none whitespace-nowrap mt-20">
-          POLICYGEN
-        </div>
-      </div>
-
       {/* HEADER */}
-      <div className="relative z-10 text-center mb-10 animate-in fade-in slide-in-from-top-5 duration-700">
+      <div className="relative z-10 text-center mb-10">
         <h1 className="text-4xl md:text-5xl font-title tron-glow mb-4 text-white">
-          Geração Inteligente
+          Revisão & Geração
         </h1>
-        <p className="text-gray-400 max-w-xl mx-auto text-lg">
-          Nossa IA compila suas regras de negócio em documentos jurídicos blindados.
-        </p>
+        
+        {/* ÁREA DE SALVAMENTO INTELIGENTE */}
+        {docs && (
+            <div className="mt-6 flex justify-center animate-in fade-in slide-in-from-bottom-4">
+                {!user ? (
+                    <button 
+                        onClick={handleLogin}
+                        className="flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-all shadow-lg animate-pulse"
+                    >
+                        <LogIn size={20} /> Entrar para Salvar (Acesso Vitalício)
+                    </button>
+                ) : (
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                           Logado como <span className="text-white font-medium">{user.displayName}</span>
+                        </div>
+                        
+                        <button 
+                            onClick={handleSaveOrUpdate}
+                            disabled={isSavingProject}
+                            className={`flex items-center gap-2 px-8 py-3 font-bold rounded-full transition-all shadow-lg text-white ${
+                                activeProjectId 
+                                ? "bg-purple-600 hover:bg-purple-500 shadow-purple-500/30" // Cor de Update
+                                : "bg-green-600 hover:bg-green-500 shadow-green-500/30" // Cor de Salvar Novo
+                            }`}
+                        >
+                            {isSavingProject ? (
+                                <Loader2 className="animate-spin"/>
+                            ) : activeProjectId ? (
+                                <><RefreshCw size={20} /> Atualizar Versão do Projeto</>
+                            ) : (
+                                <><Save size={20} /> Salvar no Meu Painel</>
+                            )}
+                        </button>
+
+                        {/* Link para voltar ao Dashboard */}
+                        <button onClick={() => router.push('/dashboard')} className="text-xs text-gray-500 hover:text-white underline">
+                            Ir para Dashboard
+                        </button>
+                    </div>
+                )}
+            </div>
+        )}
       </div>
 
-      {/* ÁREA DE AÇÃO INICIAL */}
+      {/* ÁREA DE AÇÃO INICIAL (Botão Gerar) */}
       {!docs && !loading && (
-        <div className="relative z-10 flex flex-col sm:flex-row justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="relative z-10 flex flex-col sm:flex-row justify-center gap-4">
           <button
-            onClick={() => router.push("/step-6")}
+            onClick={() => router.back()}
             className="px-6 py-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white font-medium flex items-center justify-center gap-2 transition-all"
           >
-            <ArrowLeft size={18} />
-            Revisar Dados
+            <ArrowLeft size={18} /> Voltar e Editar
           </button>
 
           <button
             onClick={generate}
-            className="px-8 py-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold flex gap-3 items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] transition-all transform hover:scale-105"
+            className="px-8 py-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold flex gap-3 items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all transform hover:scale-105"
           >
-            <Sparkles size={20} />
-            Gerar Documentos com IA
+            <Sparkles size={20} /> Gerar Documentos
           </button>
         </div>
       )}
 
-      {/* LOADING SPINNER */}
+      {/* LOADING */}
       {loading && (
         <div className="flex flex-col items-center justify-center py-24 relative z-10">
-          <div className="relative">
-            <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full"></div>
-            <Loader2 className="animate-spin text-cyan-400 relative z-10" size={64} />
-          </div>
-          <h3 className="text-xl text-white font-semibold animate-pulse mt-6">Processando Jurisprudência...</h3>
-          <p className="text-gray-500 text-sm mt-2">Redigindo cláusulas personalizadas.</p>
+          <Loader2 className="animate-spin text-cyan-400 relative z-10" size={64} />
+          <h3 className="text-xl text-white font-semibold animate-pulse mt-6">Gerando com IA...</h3>
+          <p className="text-sm text-gray-500 mt-2">Isso pode levar alguns segundos.</p>
         </div>
       )}
 
-      {/* MENSAGEM DE ERRO */}
+      {/* ERRO */}
       {error && (
-        <div className="relative z-10 mx-auto max-w-lg mt-8 p-6 bg-red-900/20 border border-red-500/30 text-red-200 rounded-xl text-center backdrop-blur-sm">
-          <p className="font-bold mb-2">❌ Ocorreu um erro</p>
-          <p className="text-sm opacity-80 mb-4">{error}</p>
-          <button 
-            onClick={generate} 
-            className="px-4 py-2 bg-red-500/20 hover:bg-red-500/40 border border-red-500/50 rounded-lg text-sm transition-colors"
-          >
-            Tentar novamente
-          </button>
+        <div className="relative z-10 mx-auto max-w-lg mt-8 p-6 bg-red-900/20 border border-red-500/30 text-red-200 rounded-xl text-center">
+          <p>❌ {error}</p>
         </div>
       )}
 
-      {/* VISUALIZADOR DE DOCUMENTOS (RESULTADO) */}
+      {/* PREVIEW DO DOCUMENTO */}
       {docs && !loading && (
         <div className="relative z-10 mt-8 animate-in zoom-in-95 duration-500 w-full">
-          
-          {/* Barra de Sucesso e Ações Globais */}
-          <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4 bg-white/5 p-4 rounded-2xl border border-white/10 backdrop-blur-md">
-            <div className="flex items-center gap-3 text-green-400">
-              <div className="bg-green-400/10 p-2 rounded-full">
-                <CheckCircle size={24} />
-              </div>
-              <div>
-                <span className="font-bold text-white block">Documentos Gerados!</span>
-                <span className="text-xs text-gray-400">Prontos para uso.</span>
-              </div>
-            </div>
-            <button
-              onClick={downloadAll}
-              className="w-full md:w-auto px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
-            >
-              <Download size={18} />
-              Baixar Pacote Completo (.md)
-            </button>
-          </div>
-
-          {/* Container Principal */}
-          <div className="bg-[#0f1115] border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col min-h-[600px]">
-            
-            {/* Abas de Navegação */}
-            <div className="flex border-b border-white/10 bg-white/5 overflow-x-auto scrollbar-hide">
-              {Object.keys(docs).map((key) => {
-                const docKey = key as ActiveTab;
-                const isActive = activeTab === docKey;
+             <div className="bg-[#0f1115] border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col min-h-[600px]">
                 
-                // Pula se o documento estiver vazio (caso raro)
-                if (!docs[docKey]) return null;
-
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setActiveTab(docKey)}
-                    className={`
-                      px-6 py-4 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap border-r border-white/5
-                      ${isActive 
-                        ? "text-cyan-400 bg-white/5 border-b-2 border-b-cyan-400" 
-                        : "text-gray-400 hover:text-white hover:bg-white/5 border-b-2 border-b-transparent"
-                      }
-                    `}
-                  >
-                    <FileText size={16} className={isActive ? "text-cyan-400" : "text-gray-500"} />
-                    {tabNames[key] || key}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Barra de Ferramentas do Documento Atual */}
-            <div className="flex items-center justify-end gap-2 p-3 border-b border-white/5 bg-[#0a0c10]">
-               <button 
-                  onClick={copyToClipboard}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-colors"
-                  title="Copiar para área de transferência"
-                >
-                  {copied ? <Check size={14} className="text-green-400"/> : <Copy size={14}/>}
-                  {copied ? "Copiado!" : "Copiar"}
-               </button>
-
-               <button 
-                  onClick={handleSaveGist}
-                  disabled={isSavingGist}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-colors disabled:opacity-50"
-                  title="Salvar como Gist no GitHub"
-                >
-                  {isSavingGist ? <Loader2 size={14} className="animate-spin"/> : <Github size={14}/>}
-                  GitHub Gist
-               </button>
-
-               <button 
-                  onClick={() => activeTab && downloadFile(docs[activeTab], `${activeTab}.md`)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-colors"
-                  title="Baixar apenas este arquivo"
-                >
-                  <Download size={14}/>
-                  Download
-               </button>
-            </div>
-
-            {/* Conteúdo do Documento */}
-            <div className="flex-1 p-6 md:p-8 bg-black/20 relative overflow-hidden">
-              {activeTab && docs[activeTab] ? (
-                <div className="h-[500px] overflow-y-auto custom-scrollbar pr-2">
-                   {/* Renderização estilo Markdown (Monospace) */}
-                   <pre className="whitespace-pre-wrap text-gray-300 font-mono text-sm leading-relaxed selection:bg-cyan-500/30 selection:text-cyan-100">
-                     {docs[activeTab]}
-                   </pre>
+                {/* TOOLBAR */}
+                <div className="flex items-center justify-end gap-2 p-3 border-b border-white/5 bg-[#0a0c10]">
+                    <button onClick={copyToClipboard} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-3 py-1 bg-white/5 rounded transition-colors hover:bg-white/10">
+                        {copied ? <Check size={14} className="text-green-400"/> : <Copy size={14}/>} {copied ? "Copiado!" : "Copiar"}
+                    </button>
+                    <button onClick={handleSaveGist} disabled={isSavingGist} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-3 py-1 bg-white/5 rounded transition-colors hover:bg-white/10">
+                         {isSavingGist ? <Loader2 className="animate-spin" size={14}/> : <GithubIcon size={14}/>} Gist
+                    </button>
+                     <button onClick={downloadAll} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 px-3 py-1 bg-white/5 rounded transition-colors hover:bg-white/10">
+                        <Download size={14}/> Baixar ZIP
+                    </button>
                 </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-500 italic gap-2 opacity-50">
-                  <FileText size={48} strokeWidth={1} />
-                  <p>Selecione um documento acima para visualizar.</p>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          {/* Footer de Navegação */}
-          <div className="text-center mt-12 pb-10">
-            <p className="text-gray-500 text-sm mb-4">Deseja alterar as respostas e gerar novamente?</p>
-            <button
-              onClick={() => router.push("/step-1")}
-              className="text-cyan-400 hover:text-cyan-300 text-sm font-medium hover:underline transition-all"
-            >
-              Reiniciar Wizard do Zero
-            </button>
-          </div>
 
+                {/* TABS */}
+                <div className="flex border-b border-white/10 bg-white/5 overflow-x-auto">
+                    {Object.keys(docs).map((key) => (
+                         <button key={key} onClick={() => setActiveTab(key as ActiveTab)} 
+                            className={`px-6 py-4 text-sm font-medium border-r border-white/5 whitespace-nowrap transition-colors ${activeTab === key ? "text-cyan-400 bg-white/5" : "text-gray-400 hover:text-white"}`}>
+                            {tabNames[key]}
+                         </button>
+                    ))}
+                </div>
+
+                {/* AREA DE TEXTO */}
+                <div className="flex-1 p-6 md:p-8 bg-black/20 overflow-y-auto h-[500px]">
+                    <pre className="whitespace-pre-wrap text-gray-300 font-mono text-sm leading-relaxed">
+                        {activeTab && docs[activeTab]}
+                    </pre>
+                </div>
+             </div>
         </div>
       )}
     </div>
+  );
+}
+
+// Wrapper para Suspense
+export default function FinalPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500">Carregando finalização...</div>}>
+      <FinalPageContent />
+    </Suspense>
   );
 }

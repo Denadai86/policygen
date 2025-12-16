@@ -42,6 +42,20 @@ export default function RootLayout({
               <a href="/step-1" className="hover:text-cyan-300 transition-colors">Começar</a>
             </nav>
           </div>
+          {/* Open Graph / Facebook */}
+            <meta property="og:url" content="https://policygen.acaoleve.com" />
+            <meta property="og:type" content="website" />
+            <meta property="og:title" content="PolicyGen — Blindagem Jurídica para Desenvolvedores e SaaS" />
+            <meta property="og:description" content="Gere Políticas de Privacidade, Termos de Uso e Cookies personalizados em minutos. Saída em Markdown, com conformidade LGPD e GDPR." />
+            <meta property="og:image" content="https://policygen.acaoleve.com/og-image.jpg" />
+            <meta property="og:site_name" content="PolicyGen" />
+
+            {/* Twitter */}
+            <meta name="twitter:card" content="summary_large_image" />
+            <meta name="twitter:url" content="https://policygen.acaoleve.com" />
+            <meta name="twitter:title" content="PolicyGen — Blindagem Jurídica para Desenvolvedores e SaaS" />
+            <meta name="twitter:description" content="Gere Políticas de Privacidade, Termos de Uso e Cookies personalizados em minutos. Saída em Markdown, com conformidade LGPD e GDPR." />
+            <meta name="twitter:image" content="https://policygen.acaoleve.com/og-image.jpg" />
         </header>
 
         {/* Renderiza as páginas sem restrição de largura aqui */}

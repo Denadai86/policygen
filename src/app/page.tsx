@@ -1,6 +1,7 @@
 // src/app/page.tsx
 'use client';
 
+import LoginButton from "@/components/LoginButton";
 import Link from "next/link";
 import { 
   ShieldCheck, 
@@ -80,7 +81,9 @@ export default function LandingPage() {
               Entenda a Cobertura
             </a>
           </div>
-          
+
+
+
           {/* LEGAL CITATION (Trust Trigger) */}
           <p className="mt-4 text-xs text-gray-500 animate-in fade-in duration-1000 delay-300">
             🔍 Revisado juridicamente para conformidade com a Lei nº 13.709/2018 (LGPD) e GDPR.

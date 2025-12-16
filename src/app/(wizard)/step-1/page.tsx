@@ -1,8 +1,8 @@
 // src/app/(wizard)/step-1/page.tsx
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   Shield, 
   FileText, 
@@ -11,12 +11,17 @@ import {
   CheckCircle2, 
   Sparkles, 
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  LogOut
 } from "lucide-react";
 import { useWizard } from "@/app/context/WizardContext";
+import { getProject } from "@/lib/db"; 
+import { auth } from "@/lib/firebase"; 
+import { signOut } from "firebase/auth";
 
 // ==========================================
-// 1. CONFIGURAÇÃO (Fácil de manter)
+// 1. CONFIGURAÇÃO
 // ==========================================
 
 interface DocumentOption {
@@ -26,7 +31,6 @@ interface DocumentOption {
   icon: React.ElementType;
   popular?: boolean;
   comingSoon?: boolean;
-  priceEstimate?: string; // Futuro uso para mostrar valor
 }
 
 const AVAILABLE_DOCS: DocumentOption[] = [
@@ -59,7 +63,7 @@ const AVAILABLE_DOCS: DocumentOption[] = [
 ];
 
 // ==========================================
-// 2. SUB-COMPONENTE (Performance + Limpeza)
+// 2. CARD COMPONENT
 // ==========================================
 
 interface CardProps {
@@ -75,7 +79,6 @@ const DocumentCard = ({ data, isSelected, onToggle }: CardProps) => {
     if (!comingSoon) onToggle(id);
   };
 
-  // Base classes
   const wrapperClasses = `
     relative group flex flex-col p-6 rounded-2xl border text-left transition-all duration-300 w-full h-full
     ${comingSoon 
@@ -87,13 +90,7 @@ const DocumentCard = ({ data, isSelected, onToggle }: CardProps) => {
   `;
 
   return (
-    <button
-      onClick={handleClick}
-      disabled={comingSoon}
-      className={wrapperClasses}
-      aria-pressed={isSelected}
-    >
-      {/* Badge Popular */}
+    <button onClick={handleClick} disabled={comingSoon} className={wrapperClasses} aria-pressed={isSelected}>
       {popular && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
           <span className="bg-gradient-to-r from-cyan-500 to-blue-500 text-black text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-lg shadow-cyan-500/20">
@@ -102,42 +99,28 @@ const DocumentCard = ({ data, isSelected, onToggle }: CardProps) => {
         </div>
       )}
 
-      {/* Header do Card */}
       <div className="flex items-start justify-between mb-5 w-full">
-        <div className={`p-3 rounded-xl transition-colors ${
-          isSelected ? "bg-cyan-500/20 text-cyan-300" : "bg-white/5 text-gray-400 group-hover:text-cyan-200"
-        }`}>
+        <div className={`p-3 rounded-xl transition-colors ${isSelected ? "bg-cyan-500/20 text-cyan-300" : "bg-white/5 text-gray-400 group-hover:text-cyan-200"}`}>
           <Icon className="w-8 h-8" />
         </div>
-
         {!comingSoon && (
-          <div className={`
-            w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300
-            ${isSelected 
-              ? "border-cyan-400 bg-cyan-400 text-black scale-100" 
-              : "border-white/20 scale-90 group-hover:border-white/40"
-            }
-          `}>
+          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${isSelected ? "border-cyan-400 bg-cyan-400 text-black scale-100" : "border-white/20 scale-90 group-hover:border-white/40"}`}>
             {isSelected && <CheckCircle2 size={16} strokeWidth={3} />}
           </div>
         )}
       </div>
 
-      {/* Conteúdo */}
-      <h3 className={`font-bold text-lg mb-2 transition-colors ${
-        isSelected ? "text-white" : "text-gray-200 group-hover:text-white"
-      }`}>
+      <h3 className={`font-bold text-lg mb-2 transition-colors ${isSelected ? "text-white" : "text-gray-200 group-hover:text-white"}`}>
         {title}
       </h3>
       <p className="text-sm text-gray-400 leading-relaxed font-medium">
         {description}
       </p>
 
-      {/* Overlay Coming Soon */}
       {comingSoon && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-2xl z-20">
           <span className="text-xs font-mono uppercase tracking-widest text-cyan-200 bg-cyan-950/90 px-3 py-1.5 rounded border border-cyan-800/50">
-            Em desenvolvimento
+            Em breve
           </span>
         </div>
       )}
@@ -146,39 +129,100 @@ const DocumentCard = ({ data, isSelected, onToggle }: CardProps) => {
 };
 
 // ==========================================
-// 3. COMPONENTE PRINCIPAL (Lógica limpa)
+// 3. LOGICA PRINCIPAL
 // ==========================================
 
-export default function Step1Page() {
+function Step1Content() {
   const router = useRouter();
-  const { update, data } = useWizard();
+  const searchParams = useSearchParams();
   
-  // Estado local inicializado com o que já existe no contexto (para voltar e editar)
+  // CORREÇÃO: Usando 'update' conforme seu WizardContext
+  const { update, data } = useWizard(); 
+
+  const [loadingProject, setLoadingProject] = useState(false);
   const [selectedDocs, setSelectedDocs] = useState<string[]>(data.documentType || []);
 
+  // Sincroniza estado local com contexto
+  useEffect(() => {
+    if (data.documentType) {
+      setSelectedDocs(data.documentType);
+    }
+  }, [data.documentType]);
+
+  // EFEITO DE HIDRATAÇÃO 💧 (Busca dados se tiver ID na URL)
+  useEffect(() => {
+    const projectId = searchParams.get("projectId");
+    
+    // Se tem ID na URL e o contexto está vazio de nome, busca no banco
+    if (projectId && !data.projectName) { 
+      loadProjectData(projectId);
+    }
+  }, [searchParams]);
+
+  const loadProjectData = async (id: string) => {
+    setLoadingProject(true);
+    const result = await getProject(id);
+    
+    if (result.success && result.data) {
+      // INJEÇÃO DE DADOS: O contexto recebe tudo do banco
+      update(result.data.answers);
+      console.log("💧 Projeto hidratado:", result.data.answers);
+    } else {
+      console.error("Erro ao carregar projeto:", result.error);
+    }
+    setLoadingProject(false);
+  };
+
   const toggleSelection = (docId: string) => {
-    setSelectedDocs((prev) =>
-      prev.includes(docId) 
-        ? prev.filter((id) => id !== docId) 
-        : [...prev, docId]
-    );
+    const newSelection = selectedDocs.includes(docId) 
+      ? selectedDocs.filter((id) => id !== docId) 
+      : [...selectedDocs, docId];
+      
+    setSelectedDocs(newSelection);
+    // Atualiza contexto imediatamente
+    update({ documentType: newSelection });
   };
 
   const handleNext = () => {
     if (selectedDocs.length === 0) return;
     
-    // Atualiza contexto
-    update({ documentType: selectedDocs });
+    // Mantém o ID na URL para os próximos passos saberem que é edição
+    const projectId = searchParams.get("projectId");
+    const query = projectId ? `?projectId=${projectId}` : "";
     
-    // Navega
-    router.push("/step-2");
+    router.push(`/step-2${query}`);
   };
 
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.push("/");
+  };
+
+  if (loadingProject) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-cyan-500 mb-4" size={48} />
+        <p className="text-gray-400 animate-pulse">Carregando seu projeto...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen relative">
       
-      {/* HEADER DA PÁGINA */}
-      <div className="flex-none pt-8 pb-10 px-6 text-center animate-in fade-in slide-in-from-top-4 duration-500">
+      {/* Botão de Logout */}
+      <div className="absolute top-4 right-6 z-50">
+        <button 
+          onClick={handleLogout}
+          className="flex items-center gap-2 text-xs text-gray-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-white/5"
+          title="Sair da conta"
+        >
+          <LogOut size={14} /> Sair
+        </button>
+      </div>
+
+      {/* Header */}
+      <div className="flex-none pt-12 pb-10 px-6 text-center animate-in fade-in slide-in-from-top-4 duration-500">
         <h1 className="text-4xl md:text-5xl font-title font-bold text-white mb-4 tracking-tight">
           Proteção Jurídica
           <span className="text-cyan-500">.</span>
@@ -189,7 +233,7 @@ export default function Step1Page() {
         </p>
       </div>
 
-      {/* ÁREA DE SELEÇÃO (GRID) */}
+      {/* Grid de Cards */}
       <div className="flex-1 w-full max-w-6xl mx-auto px-6 pb-24">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {AVAILABLE_DOCS.map((doc) => (
@@ -203,11 +247,10 @@ export default function Step1Page() {
         </div>
       </div>
 
-      {/* FOOTER FLUTUANTE DE AÇÃO */}
+      {/* Footer de Ação */}
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl supports-[backdrop-filter]:bg-[#0a0a0a]/60">
         <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
           
-          {/* Resumo da seleção */}
           <div className="flex items-center gap-3 text-sm">
             {selectedDocs.length === 0 ? (
               <div className="flex items-center gap-2 text-yellow-500/80 animate-pulse">
@@ -224,7 +267,6 @@ export default function Step1Page() {
             )}
           </div>
 
-          {/* Botão de Avançar */}
           <button
             onClick={handleNext}
             disabled={selectedDocs.length === 0}
@@ -241,7 +283,15 @@ export default function Step1Page() {
           </button>
         </div>
       </div>
-      
     </div>
+  );
+}
+
+// Wrapper para Suspense (Next.js 15)
+export default function Step1Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
+      <Step1Content />
+    </Suspense>
   );
 }

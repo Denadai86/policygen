@@ -1,20 +1,12 @@
 // src/app/(wizard)/step-2/page.tsx
 "use client";
 
-import React, { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useCallback, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useWizard } from "@/app/context/WizardContext";
+import { ArrowLeft, ArrowRight, Building2, Globe, IdCard, Mail, Type } from "lucide-react";
 
-import { ArrowLeft, ArrowRight, Check, Building2, Globe, IdCard, Mail, Type } from "lucide-react";
-
-type FormState = {
-  projectName: string;
-  brandName: string;
-  legalName: string;
-  contactEmail: string;
-  projectUrls: string; // armazenamos como CSV na UI, salvamos como array no contexto
-};
-
+// TIPO PROPS (Memoizado)
 type InputFieldProps = {
   label: string;
   icon: React.ComponentType<any>;
@@ -24,7 +16,7 @@ type InputFieldProps = {
   required?: boolean;
 };
 
-// COMPONENTE EXTERNO E MEMOIZADO (evita remounts)
+// COMPONENTE DE INPUT (Memoizado para performance)
 const InputField = React.memo(function InputField({
   label,
   icon: Icon,
@@ -56,12 +48,14 @@ const InputField = React.memo(function InputField({
   );
 });
 
-export default function Step2() {
+function Step2Content() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get("projectId");
   const { update, data } = useWizard();
 
-  // Inicializa o state com os dados existentes do contexto (sem reassigns em cada render)
-  const [form, setForm] = useState<FormState>({
+  // Inicializa state com dados do contexto
+  const [form, setForm] = useState({
     projectName: data.projectName || "",
     brandName: data.brandName || "",
     legalName: data.legalName || "",
@@ -71,15 +65,13 @@ export default function Step2() {
       : data.projectUrls || "",
   });
 
-  // Função estável para atualizar campos (useCallback evita recriação)
-  const updateField = useCallback((key: keyof FormState, value: string) => {
+  const updateField = useCallback((key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
   const nextStep = useCallback(() => {
-    if (!form.projectName.trim()) return;
+    if (!form.projectName.trim()) return alert("O nome do projeto é obrigatório!");
 
-    // converte CSV de URLs em array ao salvar no contexto
     const urlsArray = form.projectUrls
       .split(",")
       .map((u) => u.trim())
@@ -90,91 +82,95 @@ export default function Step2() {
       projectUrls: urlsArray,
     });
 
-    router.push("/step-3");
-  }, [form, router, update]);
+    // MANTÉM O ID NA URL
+    const query = projectId ? `?projectId=${projectId}` : "";
+    router.push(`/step-3${query}`);
+  }, [form, router, update, projectId]);
+
+  const handleBack = () => {
+    const query = projectId ? `?projectId=${projectId}` : "";
+    router.push(`/step-1${query}`);
+  };
 
   return (
-    <div className="w-full min-h-screen flex flex-col">
-      {/* Header */}
+    <div className="w-full min-h-screen flex flex-col relative">
       <div className="text-center pt-8 pb-10 px-6">
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
           Informações do seu Projeto
         </h1>
         <p className="text-gray-400 max-w-2xl mx-auto">
-          Preencha os dados abaixo para personalizarmos seus documentos de forma profissional.
+          Preencha os dados abaixo para personalizarmos seus documentos.
         </p>
       </div>
 
-      {/* Form container */}
-      <div className="flex-1 px-6 max-w-3xl mx-auto w-full pb-28">
+      <div className="flex-1 px-6 max-w-3xl mx-auto w-full pb-32">
         <div className="grid grid-cols-1 gap-6">
           <InputField
             label="Nome do Projeto / Aplicação"
             icon={Type}
-            placeholder="Ex: Brinca Aí, PolicyGen, Meu App Financeiro"
+            placeholder="Ex: PolicyGen, Meu SaaS"
             value={form.projectName}
             onChange={(v) => updateField("projectName", v)}
             required
           />
-
           <InputField
-            label="Nome Fantasia / Nome Comercial"
+            label="Nome Fantasia / Comercial"
             icon={IdCard}
-            placeholder="Ex: Acaolece, Acaoleve, AcaoLabs"
+            placeholder="Ex: Ação Leve Tecnologia"
             value={form.brandName}
             onChange={(v) => updateField("brandName", v)}
             required
           />
-
           <InputField
-            label="Responsável Legal / Empresa"
+            label="Razão Social / Nome Legal"
             icon={Building2}
-            placeholder="Ex: Acaolece Tecnologia LTDA, João Silva ME"
+            placeholder="Ex: João Silva ME, Ação Leve Ltda"
             value={form.legalName}
             onChange={(v) => updateField("legalName", v)}
             required
           />
-
           <InputField
             label="E-mail de Contato / DPO"
             icon={Mail}
-            placeholder="Ex: privacidade@empresa.com"
+            placeholder="privacidade@suaempresa.com"
             value={form.contactEmail}
             onChange={(v) => updateField("contactEmail", v)}
           />
-
           <InputField
             label="URL(s) do Projeto (separe por vírgula)"
             icon={Globe}
-            placeholder="Ex: https://meuapp.com, https://app.minhaempresa.com"
+            placeholder="https://meusite.com, https://app.meusite.com"
             value={form.projectUrls}
             onChange={(v) => updateField("projectUrls", v)}
           />
         </div>
       </div>
 
-      {/* Footer */}
-<div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl">
+      {/* FOOTER */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-          
-          {/* BOTÃO VOLTAR (Novo) */}
           <button
-            onClick={() => router.back()}
-            className="px-6 py-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 hover:border-white/20 transition-all flex items-center gap-2 font-medium"
+            onClick={handleBack}
+            className="px-6 py-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2 font-medium"
           >
-            <ArrowLeft size={18} />
-            Voltar
+            <ArrowLeft size={18} /> Voltar
           </button>
-
-          {/* BOTÃO AVANÇAR */}
           <button
             onClick={nextStep}
-            className="px-8 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] transition-all flex items-center gap-2"
+            className="px-8 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all flex items-center gap-2"
           >
             Próximo <ArrowRight size={18} />
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Step2() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
+      <Step2Content />
+    </Suspense>
   );
 }
