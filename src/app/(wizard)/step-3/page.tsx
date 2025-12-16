@@ -1,16 +1,15 @@
-//src/app/(wizard)/step-3/page.tsx
-
+// src/app/(wizard)/step-3/page.tsx
 "use client";
 
 import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Adicionado useSearchParams
 import { useWizard } from "@/app/context/WizardContext";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
-function Step3Content() {
+function Step3Content() { // Componente wrapper para Suspense
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = searchParams.get("projectId");
+  const projectId = searchParams.get("projectId"); // <--- AQUI: Lendo o ID
   const { data, update } = useWizard();
 
   const [form, setForm] = useState({
@@ -26,20 +25,22 @@ function Step3Content() {
 
   const nextStep = () => {
     update(form);
+    // MANTÉM O ID NA URL
     const query = projectId ? `?projectId=${projectId}` : "";
-    router.push(`/step-4${query}`);
+    router.push(`/step-4${query}`); // Repassando para o próximo passo
   };
 
   const handleBack = () => {
     const query = projectId ? `?projectId=${projectId}` : "";
-    router.push(`/step-2${query}`);
+    router.push(`/step-2${query}`); // Repassando para o passo anterior
   };
 
   return (
-    <div className="w-full min-h-screen flex flex-col relative">
+    <div className="w-full min-h-screen flex flex-col">
+      {/* Header */}
       <div className="text-center pt-8 pb-10 px-6">
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
-          Dados e Tecnologia
+          Configurações de Dados e Tecnologia
         </h1>
         <p className="text-gray-400 max-w-2xl mx-auto">
           Indique como seu serviço coleta, usa e transfere dados pessoais.
@@ -91,21 +92,34 @@ function Step3Content() {
             <label className="text-gray-300 font-medium text-sm">Países de transferência</label>
             <input
               type="text"
-              placeholder="Ex: Estados Unidos, Portugal"
+              placeholder="Ex: Estados Unidos, Portugal, Alemanha"
               value={form.transferCountries}
               onChange={(e) => updateField("transferCountries", e.target.value)}
-              className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 outline-none focus:border-cyan-400"
+              className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30"
             />
           </div>
+
         </div>
       </div>
 
+      {/* Footer */}
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-          <button onClick={handleBack} className="px-6 py-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2 font-medium">
-            <ArrowLeft size={18} /> Voltar
+          
+          {/* BOTÃO VOLTAR */}
+          <button
+            onClick={handleBack}
+            className="px-6 py-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 hover:border-white/20 transition-all flex items-center gap-2 font-medium"
+          >
+            <ArrowLeft size={18} />
+            Voltar
           </button>
-          <button onClick={nextStep} className="px-8 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all flex items-center gap-2">
+
+          {/* BOTÃO AVANÇAR */}
+          <button
+            onClick={nextStep}
+            className="px-8 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all flex items-center gap-2"
+          >
             Próximo <ArrowRight size={18} />
           </button>
         </div>

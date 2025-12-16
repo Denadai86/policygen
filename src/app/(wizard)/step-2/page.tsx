@@ -2,8 +2,9 @@
 "use client";
 
 import React, { useCallback, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Adicionado useSearchParams
 import { useWizard } from "@/app/context/WizardContext";
+
 import { ArrowLeft, ArrowRight, Building2, Globe, IdCard, Mail, Type } from "lucide-react";
 
 // TIPO PROPS (Memoizado)
@@ -51,7 +52,7 @@ const InputField = React.memo(function InputField({
 function Step2Content() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = searchParams.get("projectId");
+  const projectId = searchParams.get("projectId"); // <--- AQUI: Lendo o ID
   const { update, data } = useWizard();
 
   // Inicializa state com dados do contexto
@@ -84,16 +85,17 @@ function Step2Content() {
 
     // MANTÉM O ID NA URL
     const query = projectId ? `?projectId=${projectId}` : "";
-    router.push(`/step-3${query}`);
+    router.push(`/step-3${query}`); // Repassando para o próximo passo
   }, [form, router, update, projectId]);
 
   const handleBack = () => {
     const query = projectId ? `?projectId=${projectId}` : "";
-    router.push(`/step-1${query}`);
+    router.push(`/step-1${query}`); // Repassando para o passo anterior
   };
 
   return (
     <div className="w-full min-h-screen flex flex-col relative">
+      {/* ... (Restante do conteúdo visual) ... */}
       <div className="text-center pt-8 pb-10 px-6">
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
           Informações do seu Projeto

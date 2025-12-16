@@ -2,15 +2,20 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Adicionado useSearchParams
 import { Globe, Scale, ShieldCheck, ArrowRight, ArrowLeft } from "lucide-react";
+
+// Imports internos (assumo que existam)
 import MagicSwitch from "../../../components/MagicSwitch";
 import ModalSelector from "../../../components/ModalSelector";
 import { jurisdictions } from "../../../data/jurisdictions";
 import { languages } from "../../../data/languages";
+
+// IMPORTANTE: Importamos os tipos oficiais do Contexto para evitar conflitos
 import { useWizard } from "@/app/context/WizardContext";
 import type { Jurisdiction, Language } from "@/app/context/WizardContext";
 
+// Tipagem Sincronizada com a Fonte da Verdade
 type FormState = {
   jurisdiction: Jurisdiction;
   language: Language;
@@ -21,15 +26,16 @@ type FormState = {
   requireConsent: boolean;
 };
 
-function Step4Content() {
+function Step4Content() { // Componente wrapper para Suspense
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = searchParams.get("projectId");
+  const projectId = searchParams.get("projectId"); // <--- AQUI: Lendo o ID
   const { data, update } = useWizard();
 
   const [showJurisdictionModal, setShowJurisdictionModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
+  // Inicialização segura com Type Casting correto
   const [form, setForm] = useState<FormState>({
     jurisdiction: (data.jurisdiction as Jurisdiction) || "br",
     language: (data.language as Language) || "pt-br",
@@ -39,7 +45,7 @@ function Step4Content() {
     includeLastUpdated: data.includeLastUpdated ?? true,
     requireConsent: data.requireConsent ?? false,
   });
-
+  
   useEffect(() => {
     setForm((prev) => ({
       ...prev,
@@ -54,13 +60,14 @@ function Step4Content() {
 
   const nextStep = () => {
     update(form);
+    // MANTÉM O ID NA URL
     const query = projectId ? `?projectId=${projectId}` : "";
-    router.push(`/step-5${query}`);
+    router.push(`/step-5${query}`); // Repassando para o próximo passo
   };
 
   const handleBack = () => {
     const query = projectId ? `?projectId=${projectId}` : "";
-    router.push(`/step-3${query}`);
+    router.push(`/step-3${query}`); // Repassando para o passo anterior
   };
 
   const currentJurisdictionLabel = jurisdictions.find(j => j.value === form.jurisdiction)?.label;
