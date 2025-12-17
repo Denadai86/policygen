@@ -1,4 +1,4 @@
-// src/app/(wizard)/step-1/page.tsx - Com Login Forçado
+// src/app/(wizard)/step-1/page.tsx - Com Termos de Aceite
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
@@ -13,15 +13,18 @@ import {
   ArrowRight,
   AlertCircle,
   Loader2,
-  LogOut
+  LogOut,
+  // Adicionado para o checkbox
+  CheckSquare,
 } from "lucide-react";
 import { useWizard } from "@/app/context/WizardContext";
 import { getProject } from "@/lib/db"; 
 import { auth } from "@/lib/firebase"; 
-import { signOut, onAuthStateChanged } from "firebase/auth"; // Importa onAuthStateChanged
+import { signOut } from "firebase/auth";
 
-// ... (Resto das configurações e DocumentCard) ...
-// (Mantenha as configurações e o componente DocumentCard do seu arquivo original)
+// ==========================================
+// 1. CONFIGURAÇÃO (Mantida)
+// ==========================================
 
 interface DocumentOption {
   id: string;
@@ -33,7 +36,6 @@ interface DocumentOption {
 }
 
 const AVAILABLE_DOCS: DocumentOption[] = [
-  // ... (Mantenha seu array AVAILABLE_DOCS aqui)
   {
     id: "Política de Privacidade",
     title: "Política de Privacidade",
@@ -62,191 +64,8 @@ const AVAILABLE_DOCS: DocumentOption[] = [
   },
 ];
 
-// ... (Componente DocumentCard vai aqui) ...
-
 // ==========================================
-// 3. LOGICA PRINCIPAL (Login Forçado + Hidratação)
-// ==========================================
-
-function Step1Content() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { update, data, reset } = useWizard();
-  
-  const [loadingApp, setLoadingApp] = useState(true); // Novo estado de carregamento
-  const [loadingProject, setLoadingProject] = useState(false);
-  const [selectedDocs, setSelectedDocs] = useState<string[]>(data.documentType || []);
-  
-  // 🚨 NOVO: Efeito de Proteção de Rota e Sincronização
-  useEffect(() => {
-      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-          if (!currentUser) {
-              // Se não estiver logado, chuta para a Home
-              router.push("/");
-              return;
-          }
-
-          // Se estiver logado, verifica a URL para Hidratação
-          const projectId = searchParams.get("projectId");
-          if (projectId && !data.projectName) { 
-              loadProjectData(projectId);
-          } else if (!projectId) {
-              // Se não tem ID na URL, reseta o estado para começar um novo projeto.
-              reset();
-              setSelectedDocs([]);
-              setLoadingApp(false);
-          } else {
-              setLoadingApp(false);
-          }
-      });
-      return () => unsubscribe();
-  }, [searchParams, router]);
-
-  // Resto da lógica de carregamento do projeto (Hydration)
-  const loadProjectData = async (id: string) => {
-    setLoadingProject(true);
-    const result = await getProject(id);
-    
-    if (result.success && result.data) {
-      update(result.data.answers);
-      setSelectedDocs(result.data.answers.documentType || []);
-      console.log("💧 Projeto hidratado:", result.data.answers);
-    } else {
-      console.error("Erro ao carregar projeto:", result.error);
-    }
-    setLoadingProject(false);
-    setLoadingApp(false);
-  };
-  
-  // ... (Resto das funções toggleSelection, handleNext, handleLogout) ...
-  
-  const toggleSelection = (docId: string) => {
-    const newSelection = selectedDocs.includes(docId) 
-      ? selectedDocs.filter((id) => id !== docId) 
-      : [...selectedDocs, docId];
-      
-    setSelectedDocs(newSelection);
-    update({ documentType: newSelection });
-  };
-
-  const handleNext = () => {
-    if (selectedDocs.length === 0) return;
-    
-    const projectId = searchParams.get("projectId");
-    const query = projectId ? `?projectId=${projectId}` : "";
-    
-    router.push(`/step-2${query}`);
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push("/");
-  };
-
-
-  if (loadingApp || loadingProject) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-cyan-500 mb-4" size={48} />
-        <p className="text-gray-400 animate-pulse">{loadingProject ? "Carregando projeto..." : "Verificando autenticação..."}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col min-h-screen relative">
-      
-      {/* Botão de Logout Discreto no Topo */}
-      <div className="absolute top-4 right-6 z-50">
-        <button 
-          onClick={handleLogout}
-          className="flex items-center gap-2 text-xs text-gray-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-white/5"
-          title="Sair da conta"
-        >
-          <LogOut size={14} /> Sair
-        </button>
-      </div>
-
-      {/* HEADER DA PÁGINA */}
-      <div className="flex-none pt-12 pb-10 px-6 text-center animate-in fade-in slide-in-from-top-4 duration-500">
-        <h1 className="text-4xl md:text-5xl font-title font-bold text-white mb-4 tracking-tight">
-          Proteção Jurídica
-          <span className="text-cyan-500">.</span>
-        </h1>
-        <p className="text-gray-400 max-w-2xl mx-auto text-lg leading-relaxed">
-          Selecione os módulos de defesa para o seu software.
-          <br className="hidden md:block"/> Nossa IA gera tudo baseado nas leis vigentes.
-        </p>
-      </div>
-
-      {/* ÁREA DE SELEÇÃO (GRID) */}
-      <div className="flex-1 w-full max-w-6xl mx-auto px-6 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {AVAILABLE_DOCS.map((doc) => (
-            <DocumentCard
-              key={doc.id}
-              data={doc}
-              isSelected={selectedDocs.includes(doc.id)}
-              onToggle={toggleSelection}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* FOOTER FLUTUANTE DE AÇÃO */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl supports-[backdrop-filter]:bg-[#0a0a0a]/60">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          
-          {/* Resumo da seleção */}
-          <div className="flex items-center gap-3 text-sm">
-            {selectedDocs.length === 0 ? (
-              <div className="flex items-center gap-2 text-yellow-500/80 animate-pulse">
-                <AlertCircle size={16} />
-                <span>Selecione pelo menos um documento</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-cyan-400">
-                <CheckCircle2 size={18} />
-                <span className="font-semibold">
-                  {selectedDocs.length} {selectedDocs.length === 1 ? 'documento selecionado' : 'documentos selecionados'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Botão de Avançar */}
-          <button
-            onClick={handleNext}
-            disabled={selectedDocs.length === 0}
-            className={`
-              group relative flex items-center gap-3 px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-300
-              ${selectedDocs.length === 0
-                ? "bg-white/5 text-gray-500 cursor-not-allowed border border-white/5"
-                : "bg-cyan-500 hover:bg-cyan-400 text-black shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] scale-100 hover:scale-[1.02]"
-              }
-            `}
-          >
-            <span>Continuar</span>
-            <ArrowRight size={18} className={`transition-transform duration-300 ${selectedDocs.length > 0 ? "group-hover:translate-x-1" : ""}`} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Wrapper para Suspense
-export default function Step1Page() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
-      <Step1Content />
-    </Suspense>
-  );
-}
-
-// ==========================================
-// IMPORTANTE: COLOQUE O COMPONENTE DocumentCard AQUI
-// (Ou logo abaixo dos imports, antes de Step1Content)
+// 2. CARD COMPONENT (Mantido)
 // ==========================================
 
 interface CardProps {
@@ -310,3 +129,188 @@ const DocumentCard = ({ data, isSelected, onToggle }: CardProps) => {
     </button>
   );
 };
+
+// ==========================================
+// 3. LOGICA PRINCIPAL
+// ==========================================
+
+function Step1Content() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  const { update, data } = useWizard(); 
+
+  const [loadingProject, setLoadingProject] = useState(false);
+  const [selectedDocs, setSelectedDocs] = useState<string[]>(data.documentType || []);
+  
+  // 🚨 NOVO ESTADO: Aceite dos Termos do PolicyGen
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false); 
+
+  // Sincroniza estado local com contexto
+  useEffect(() => {
+    if (data.documentType) {
+      setSelectedDocs(data.documentType);
+    }
+  }, [data.documentType]);
+
+  // EFEITO DE HIDRATAÇÃO 💧 (Busca dados se tiver ID na URL)
+  useEffect(() => {
+    const projectId = searchParams.get("projectId");
+    
+    if (projectId && !data.projectName) { 
+      loadProjectData(projectId);
+    }
+  }, [searchParams]);
+
+  const loadProjectData = async (id: string) => {
+    setLoadingProject(true);
+    const result = await getProject(id);
+    
+    if (result.success && result.data) {
+      update(result.data.answers);
+      setSelectedDocs(result.data.answers.documentType || []);
+      console.log("💧 Projeto hidratado:", result.data.answers);
+    } else {
+      console.error("Erro ao carregar projeto:", result.error);
+    }
+    setLoadingProject(false);
+  };
+
+  const toggleSelection = (docId: string) => {
+    const newSelection = selectedDocs.includes(docId) 
+      ? selectedDocs.filter((id) => id !== docId) 
+      : [...selectedDocs, docId];
+      
+    setSelectedDocs(newSelection);
+    update({ documentType: newSelection });
+  };
+
+  const handleNext = () => {
+    // 🚨 REGRA CRÍTICA: Deve ter docs selecionados E termos aceitos
+    if (selectedDocs.length === 0 || !hasAcceptedTerms) return;
+    
+    const projectId = searchParams.get("projectId");
+    const query = projectId ? `?projectId=${projectId}` : "";
+    
+    router.push(`/step-2${query}`);
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.push("/");
+  };
+
+  if (loadingProject) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-cyan-500 mb-4" size={48} />
+        <p className="text-gray-400 animate-pulse">Carregando seu projeto...</p>
+      </div>
+    );
+  }
+
+  // Define se o botão deve estar desabilitado
+  const isNextDisabled = selectedDocs.length === 0 || !hasAcceptedTerms;
+
+  return (
+    <div className="flex flex-col min-h-screen relative">
+      
+      {/* Botão de Logout */}
+      <div className="absolute top-4 right-6 z-50">
+        <button 
+          onClick={handleLogout}
+          className="flex items-center gap-2 text-xs text-gray-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-white/5"
+          title="Sair da conta"
+        >
+          <LogOut size={14} /> Sair
+        </button>
+      </div>
+
+      {/* Header */}
+      <div className="flex-none pt-12 pb-10 px-6 text-center animate-in fade-in slide-in-from-top-4 duration-500">
+        <h1 className="text-4xl md:text-5xl font-title font-bold text-white mb-4 tracking-tight">
+          Proteção Jurídica
+          <span className="text-cyan-500">.</span>
+        </h1>
+        <p className="text-gray-400 max-w-2xl mx-auto text-lg leading-relaxed">
+          Selecione os módulos de defesa para o seu software.
+          <br className="hidden md:block"/> Nossa IA gera tudo baseado nas leis vigentes.
+        </p>
+      </div>
+
+      {/* Grid de Cards */}
+      <div className="flex-1 w-full max-w-6xl mx-auto px-6 pb-24">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {AVAILABLE_DOCS.map((doc) => (
+            <DocumentCard
+              key={doc.id}
+              data={doc}
+              isSelected={selectedDocs.includes(doc.id)}
+              onToggle={toggleSelection}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Footer de Ação */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl supports-[backdrop-filter]:bg-[#0a0a0a]/60">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+          
+          {/* CHECKBOX DE ACEITE */}
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+            <input 
+                type="checkbox"
+                checked={hasAcceptedTerms}
+                onChange={() => setHasAcceptedTerms(!hasAcceptedTerms)}
+                className="w-4 h-4 text-cyan-500 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500"
+            />
+            <span>
+              Eu li e concordo com os <a href="/terms-of-service" target="_blank" className="text-cyan-400 underline hover:text-cyan-300">Termos de Uso</a> e a <a href="/privacy-policy" target="_blank" className="text-cyan-400 underline hover:text-cyan-300">Política de Privacidade</a> do PolicyGen.
+            </span>
+          </label>
+
+          {/* STATUS E BOTÃO */}
+          <div className="flex items-center gap-3 text-sm">
+            {selectedDocs.length === 0 ? (
+              <div className="flex items-center gap-2 text-yellow-500/80 animate-pulse">
+                <AlertCircle size={16} />
+                <span>Selecione um documento</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-cyan-400">
+                <CheckCircle2 size={18} />
+                <span className="font-semibold">
+                  {selectedDocs.length} {selectedDocs.length === 1 ? 'documento selecionado' : 'documentos selecionados'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleNext}
+            disabled={isNextDisabled} // Usa a flag de desabilitado
+            className={`
+              group relative flex items-center gap-3 px-8 py-3.5 rounded-xl font-bold text-base transition-all duration-300
+              ${isNextDisabled
+                ? "bg-white/5 text-gray-500 cursor-not-allowed border border-white/5"
+                : "bg-cyan-500 hover:bg-cyan-400 text-black shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] scale-100 hover:scale-[1.02]"
+              }
+            `}
+          >
+            <span>Continuar</span>
+            <ArrowRight size={18} className={`transition-transform duration-300 ${isNextDisabled ? "" : "group-hover:translate-x-1"}`} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Wrapper para Suspense (Next.js 15)
+export default function Step1Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
+      <Step1Content />
+    </Suspense>
+  );
+}
