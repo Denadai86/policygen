@@ -4,78 +4,99 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 
 const bodySchema = z.object({
-  answers: z.record(z.string(), z.any()), 
+  answers: z.record(z.string(), z.any()), 
 });
 
 export async function POST(req: Request) {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "API Key ausente" }, { status: 500 });
-    }
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "API Key ausente" }, { status: 500 });
+    }
 
-    const body = await req.json();
-    const validation = bodySchema.safeParse(body);
+    const body = await req.json();
+    const validation = bodySchema.safeParse(body);
+    
+    if (!validation.success) {
+      return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+    }
+
+    const { answers } = validation.data;
+
+    // --- LÓGICA DE FILTRO CRÍTICA ---
+    const selectedDocs = answers.documentType || [];
+    
+    // Mapeamento das chaves de documentos do JSON e o título selecionável
+    const docMap: Record<string, string> = {
+      privacyPolicy: "Política de Privacidade",
+      termsOfUse: "Termos de Uso",
+      cookiePolicy: "Política de Cookies",
+    };
     
-    if (!validation.success) {
-      return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+    // Identifica quais documentos a IA DEVE gerar
+    const docsToGenerate = Object.keys(docMap)
+      .filter(key => selectedDocs.includes(docMap[key]))
+      .map(key => `"${key}"`); 
+    
+    if (docsToGenerate.length === 0) {
+        return NextResponse.json({ 
+            documents: { privacyPolicy: "", termsOfUse: "", cookiePolicy: "" } 
+        });
     }
 
-    const { answers } = validation.data;
+    // Cria a lista de documentos requeridos para o prompt
+    const requiredDocsList = docsToGenerate.join(", "); 
+    
+    // --- GERAÇÃO E CONFIGURAÇÃO ---
+    const today = new Date().toLocaleDateString("pt-BR", {
+      day: "numeric", month: "long", year: "numeric"
+    });
+    answers.currentDate = today;
 
-    // --- CORREÇÃO 1: DATAS REAIS ---
-    // Cria a data formatada (ex: "12 de dezembro de 2025")
-    const today = new Date().toLocaleDateString("pt-BR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric"
-    });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      generationConfig: { responseMimeType: "application/json" } 
+    });
 
-    // Injeta a data no objeto de respostas para a IA ler
-    answers.currentDate = today;
+    const prompt = `
+      Você é um gerador de documentos jurídicos (Legal Tech).
+      Gere os seguintes documentos (e SOMENTE estes): ${requiredDocsList}.
+      Baseie-se nos dados do usuário: ${JSON.stringify(answers)}
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
-      generationConfig: { responseMimeType: "application/json" } 
-    });
+      REGRAS CRÍTICAS:
+      1. Retorne APENAS um objeto JSON válido.
+      2. Para os documentos NÃO solicitados, coloque o valor como uma string vazia ("").
+      3. NUNCA use Markdown no JSON.
+      4. As chaves DEVEM ser: "privacyPolicy", "termsOfUse", "cookiePolicy".
+      
+      IMPORTANTE SOBRE DATAS:
+      - A data de hoje é: "${today}".
+      - SEMPRE substitua placeholders como [DATA] ou "Data Atual" por "${today}".
+      - No final dos documentos, coloque: "Última atualização: ${today}".
 
-    const prompt = `
-      Você é um gerador de documentos jurídicos (Legal Tech).
-      Gere 3 documentos baseados nos dados: ${JSON.stringify(answers)}
+      Exemplo da Estrutura (mesmo que um seja vazio):
+      {
+        "privacyPolicy": "...",
+        "termsOfUse": "", // Vazio se não for solicitado
+        "cookiePolicy": "..."
+      }
+    `;
 
-      REGRAS CRÍTICAS:
-      1. Retorne APENAS um objeto JSON válido.
-      2. NÃO use Markdown no JSON.
-      3. As chaves DEVEM ser: "privacyPolicy", "termsOfUse", "cookiePolicy".
-      
-      IMPORTANTE SOBRE DATAS:
-      - A data de hoje é: "${today}".
-      - SEMPRE substitua placeholders como [DATA], [DATE] ou "Data Atual" por "${today}".
-      - No final dos documentos, coloque: "Última atualização: ${today}".
+    console.log("🤖 Enviando prompt ao Gemini...");
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let text = response.text();
 
-      Estrutura do JSON:
-      {
-        "privacyPolicy": "# Política de Privacidade\n\nTexto aqui...",
-        "termsOfUse": "# Termos de Uso\n\nTexto aqui...",
-        "cookiePolicy": "# Política de Cookies\n\nTexto aqui..."
-      }
-    `;
+    // Limpeza de segurança (se a IA responder com markdown)
+    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
-    console.log("🤖 Enviando prompt ao Gemini...");
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response.text();
+    const documents = JSON.parse(text);
 
-    // Limpeza de segurança
-    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    return NextResponse.json({ documents });
 
-    const documents = JSON.parse(text);
-
-    return NextResponse.json({ documents });
-
-  } catch (error: any) {
-    console.error("💥 Erro Geral:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  } catch (error: any) {
+    console.error("💥 Erro Geral:", error);
+    return NextResponse.json({ error: "Erro interno na geração." }, { status: 500 });
+  }
 }

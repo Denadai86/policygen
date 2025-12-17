@@ -1,8 +1,15 @@
 // src/app/page.tsx
 'use client';
 
-import LoginButton from "@/components/LoginButton";
+import { useState, useEffect } from 'react'; // Importados para gerenciar o estado
+import LoginButton from "@/components/LoginButton"; 
 import Link from "next/link";
+import { useRouter } from "next/navigation"; // Importado para o Redirect
+
+// Firebase/Auth Imports
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { auth } from "@/lib/firebase"; // Assumindo que você tem isso configurado
+ 
 import { 
   ShieldCheck, 
   Code2, 
@@ -13,10 +20,62 @@ import {
   Lock, 
   Terminal,
   Scale,
-  FileText
+  FileText,
+  User as UserIcon, // Novo ícone para o nome
+  Loader2 // Adicionado para o Loading
 } from "lucide-react";
 
-export default function LandingPage() {
+
+// ===============================================
+// 1. AUTH WRAPPER (Gerencia Login e Redirect)
+// ===============================================
+
+function LandingPageAuthWrapper() {
+    const router = useRouter();
+    const [user, setUser] = useState<FirebaseUser | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        // Listener que verifica o status de autenticação
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            if (currentUser) {
+                // Usuário logado: REDIRECIONA IMEDIATAMENTE PARA O DASHBOARD
+                setUser(currentUser);
+                router.push('/dashboard'); 
+            } else {
+                // Usuário deslogado: Mostra a Landing Page (finaliza o loading)
+                setUser(null);
+                setLoading(false);
+            }
+        });
+
+        // Limpa o listener ao desmontar o componente
+        return () => unsubscribe();
+    }, [router]);
+
+    // Se estiver carregando (esperando a resposta do Firebase), mostra um loader
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#050505]">
+                <Loader2 className="animate-spin text-cyan-400" size={48} />
+                <p className='text-gray-400 ml-4'>Verificando sessão...</p>
+            </div>
+        );
+    }
+
+    // Se estiver deslogado, renderiza o conteúdo da Landing Page
+    return <LandingPageContent user={user} />;
+}
+
+
+// ===============================================
+// 2. LANDING PAGE CONTENT (O Design)
+// ===============================================
+
+function LandingPageContent({ user }: { user: FirebaseUser | null }) {
+  // Pega o primeiro nome do usuário para o "Tchanannam"
+  const firstName = user?.displayName?.split(' ')[0];
+
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#050505] selection:bg-cyan-500/30 selection:text-cyan-100">
       
@@ -24,7 +83,7 @@ export default function LandingPage() {
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
       <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-cyan-500 opacity-20 blur-[100px]"></div>
 
-      {/* NAVBAR */}
+      {/* NAVBAR - AJUSTADA COM NOME DO USUÁRIO */}
       <nav className="border-b border-white/10 bg-black/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -38,12 +97,22 @@ export default function LandingPage() {
             <Link href="#precos" className="hover:text-white transition-colors">Preços</Link>
           </div>
 
-          <Link 
-            href="/step-1" 
-            className="px-5 py-2 rounded-full bg-white text-black font-bold text-sm hover:bg-gray-200 transition-all flex items-center gap-2"
-          >
-            Gerar Agora <ArrowRight size={14}/>
-          </Link>
+          {/* CTA NAV BAR: AGORA EXIBE O NOME SE ESTIVER LOGADO */}
+          {user ? (
+              <Link 
+                  href="/dashboard"
+                  className="px-4 py-2 rounded-full bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all flex items-center gap-2 border border-white/20"
+              >
+                  <UserIcon size={16} className="text-cyan-400"/>
+                  {firstName || 'Dashboard'} {/* Tchanannam aqui */}
+              </Link>
+          ) : (
+              <LoginButton
+                  className="px-5 py-2 rounded-full bg-white text-black font-bold text-sm hover:bg-gray-200 transition-all flex items-center gap-2"
+              >
+                  Entrar / Gerar <ArrowRight size={14}/>
+              </LoginButton>
+          )}
         </div>
       </nav>
 
@@ -69,19 +138,28 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-            <Link 
-              href="/step-1" 
-              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-lg shadow-[0_0_40px_rgba(6,182,212,0.3)] hover:shadow-[0_0_60px_rgba(6,182,212,0.5)] transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2"
-            >
-              Começar Blindagem
-              <ArrowRight size={20} />
-            </Link>
+            {/* CTA HERO SECTION: AGORA USA O USER STATE PARA DEFINIR O DESTINO */}
+            {user ? (
+                <Link 
+                    href="/dashboard" 
+                    className="w-full sm:w-auto px-8 py-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-lg shadow-[0_0_40px_rgba(6,182,212,0.3)] hover:shadow-[0_0_60px_rgba(6,182,212,0.5)] transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2"
+                >
+                    Ir para Dashboard
+                    <ArrowRight size={20} />
+                </Link>
+            ) : (
+                 <LoginButton 
+                    className="w-full sm:w-auto px-8 py-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-lg shadow-[0_0_40px_rgba(6,182,212,0.3)] hover:shadow-[0_0_60px_rgba(6,182,212,0.5)] transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2"
+                 >
+                    Começar Blindagem
+                    <ArrowRight size={20} />
+                 </LoginButton>
+            )}
             
             <a href="#compliance" className="w-full sm:w-auto px-8 py-4 rounded-xl border border-white/10 hover:bg-white/5 text-white font-medium transition-all">
-              Entenda a Cobertura
+                Entenda a Cobertura
             </a>
           </div>
-
 
 
           {/* LEGAL CITATION (Trust Trigger) */}
@@ -94,58 +172,58 @@ export default function LandingPage() {
 
       {/* VISUAL CODE PREVIEW (The "Tangibility" Trigger) */}
       <section className="px-6 pb-24">
-         <div className="mt-8 mb-12 relative max-w-4xl mx-auto group animate-in zoom-in-95 duration-1000 delay-300">
-          <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
-          <div className="relative rounded-xl bg-[#0d1117] ring-1 ring-white/10 leading-none flex items-top justify-start space-x-6 overflow-hidden shadow-2xl">
-            
-            {/* Barra Lateral do Editor (CORRIGIDO: hidden sm:flex) */}
-            <div className="w-12 border-r border-white/5 bg-[#0a0c10] hidden sm:flex flex-col items-center pt-4 gap-3">
-               <div className="w-3 h-3 rounded-full bg-red-500/20"></div>
-               <div className="w-3 h-3 rounded-full bg-yellow-500/20"></div>
-               <div className="w-3 h-3 rounded-full bg-green-500/20"></div>
-            </div>
+           <div className="mt-8 mb-12 relative max-w-4xl mx-auto group animate-in zoom-in-95 duration-1000 delay-300">
+           <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+           <div className="relative rounded-xl bg-[#0d1117] ring-1 ring-white/10 leading-none flex items-top justify-start space-x-6 overflow-hidden shadow-2xl">
+             
+             {/* Barra Lateral do Editor (CORRIGIDO: hidden sm:flex) */}
+             <div className="w-12 border-r border-white/5 bg-[#0a0c10] hidden sm:flex flex-col items-center pt-4 gap-3">
+                <div className="w-3 h-3 rounded-full bg-red-500/20"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500/20"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500/20"></div>
+             </div>
 
-            {/* Área de Código */}
-            <div className="p-6 font-mono text-sm text-gray-400 w-full overflow-hidden text-left bg-[#0d1117]">
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">1</span>
-                <span className="text-purple-400"># Política de Privacidade</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">2</span>
-                <span></span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">3</span>
-                <span>Esta Política descreve como a <span className="text-cyan-300 font-bold">Sua Empresa</span> coleta, usa e protege dados.</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">4</span>
-                <span></span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">5</span>
-                <span className="text-blue-400">## 1. Coleta de Dados (LGPD Art. 7)</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">6</span>
-                <span>Coletamos os seguintes dados para fins de autenticação e melhoria:</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">7</span>
-                <span className="text-green-400">- E-mail (Obrigatório)</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">8</span>
-                <span className="text-green-400">- Endereço IP (Logs de segurança)</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-700 select-none w-6 text-right">9</span>
-                <span className="text-green-400">- Cookies de Analytics (Google/Meta)</span>
-              </div>
-            </div>
-          </div>
-        </div>
+             {/* Área de Código */}
+             <div className="p-6 font-mono text-sm text-gray-400 w-full overflow-hidden text-left bg-[#0d1117]">
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">1</span>
+                 <span className="text-purple-400"># Política de Privacidade</span>
+               </div>
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">2</span>
+                 <span></span>
+               </div>
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">3</span>
+                 <span>Esta Política descreve como a <span className="text-cyan-300 font-bold">Sua Empresa</span> coleta, usa e protege dados.</span>
+               </div>
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">4</span>
+                 <span></span>
+               </div>
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">5</span>
+                 <span className="text-blue-400">## 1. Coleta de Dados (LGPD Art. 7)</span>
+               </div>
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">6</span>
+                 <span>Coletamos os seguintes dados para fins de autenticação e melhoria:</span>
+               </div>
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">7</span>
+                 <span className="text-green-400">- E-mail (Obrigatório)</span>
+               </div>
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">8</span>
+                 <span className="text-green-400">- Endereço IP (Logs de segurança)</span>
+               </div>
+               <div className="flex gap-4">
+                 <span className="text-gray-700 select-none w-6 text-right">9</span>
+                 <span className="text-green-400">- Cookies de Analytics (Google/Meta)</span>
+               </div>
+             </div>
+           </div>
+         </div>
       </section>
 
       {/* GLOBAL COMPLIANCE SECTION */}
@@ -157,8 +235,8 @@ export default function LandingPage() {
           <div className="md:flex items-center gap-16">
             <div className="flex-1 mb-10 md:mb-0">
                <h2 className="text-3xl md:text-4xl font-title font-bold text-white mb-6">
-                Seu SaaS não tem fronteiras.<br/>
-                <span className="text-cyan-500">Sua proteção também não.</span>
+               Seu SaaS não tem fronteiras.<br/>
+               <span className="text-cyan-500">Sua proteção também não.</span>
                </h2>
                <p className="text-gray-400 text-lg leading-relaxed mb-6">
                  Muitos geradores focam apenas no Brasil. Mas se seu software é acessado por um usuário na Califórnia, você está sujeito à <strong>CCPA</strong>. Se um europeu compra seu curso, a <strong>GDPR</strong> se aplica.
@@ -286,7 +364,7 @@ export default function LandingPage() {
             {/* Free Tier */}
             <div className="p-8 rounded-3xl border border-cyan-500/30 bg-white/[0.02] flex flex-col relative overflow-hidden">
                <div className="absolute top-0 right-0 bg-cyan-500/20 text-cyan-300 text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">
-                  Disponível Agora
+                 Disponível Agora
                </div>
               <div className="mb-4">
                 <span className="text-sm font-bold uppercase tracking-wider text-gray-500">Early Access</span>
@@ -307,9 +385,10 @@ export default function LandingPage() {
                   <CheckCircle2 size={16} className="text-cyan-500"/> Copy & Paste (Markdown)
                 </li>
               </ul>
-              <Link href="/step-1" className="w-full py-3 rounded-xl bg-white text-black font-bold text-center hover:bg-gray-200 transition-colors">
+              {/* CTA FREE TIER: Agora usa o LoginButton */}
+              <LoginButton className="w-full py-3 rounded-xl bg-white text-black font-bold text-center hover:bg-gray-200 transition-colors">
                 Gerar Documentos Agora
-              </Link>
+              </LoginButton>
             </div>
 
             {/* Pro Tier (Coming Soon) */}
@@ -346,42 +425,42 @@ export default function LandingPage() {
       <section className="py-24 px-6 border-t border-white/5">
         <div className="max-w-4xl mx-auto text-center">
            <h2 className="text-2xl md:text-3xl font-title font-bold text-white mb-10">
-              Construindo para o futuro do Compliance
+             Construindo para o futuro do Compliance
            </h2>
            
            <div className="grid md:grid-cols-3 gap-6">
-              <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col items-center">
-                 <div className="p-3 bg-red-500/10 rounded-lg text-red-400 mb-4">
-                    <FileText size={24} />
-                 </div>
-                 <h3 className="text-white font-bold mb-2">Exportação PDF</h3>
-                 <p className="text-gray-500 text-sm">Gere documentos prontos para enviar para o jurídico ou assinar digitalmente.</p>
-                 <span className="mt-4 text-xs font-mono text-cyan-500 bg-cyan-950/30 px-2 py-1 rounded">Sprint Atual</span>
-              </div>
+             <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col items-center">
+                <div className="p-3 bg-red-500/10 rounded-lg text-red-400 mb-4">
+                   <FileText size={24} />
+                </div>
+                <h3 className="text-white font-bold mb-2">Exportação PDF</h3>
+                <p className="text-gray-500 text-sm">Gere documentos prontos para enviar para o jurídico ou assinar digitalmente.</p>
+                <span className="mt-4 text-xs font-mono text-cyan-500 bg-cyan-950/30 px-2 py-1 rounded">Sprint Atual</span>
+             </div>
 
-              <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col items-center opacity-60">
-                 <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400 mb-4">
-                    <Terminal size={24} />
-                 </div>
-                 <h3 className="text-white font-bold mb-2">PolicyGen API</h3>
-                 <p className="text-gray-500 text-sm">Gere políticas programaticamente direto do seu CI/CD ou backend.</p>
-                 <span className="mt-4 text-xs font-mono text-gray-500 bg-white/5 px-2 py-1 rounded">Planejado Q1</span>
-              </div>
+             <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col items-center opacity-60">
+                <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400 mb-4">
+                   <Terminal size={24} />
+                </div>
+                <h3 className="text-white font-bold mb-2">PolicyGen API</h3>
+                <p className="text-gray-500 text-sm">Gere políticas programaticamente direto do seu CI/CD ou backend.</p>
+                <span className="mt-4 text-xs font-mono text-gray-500 bg-white/5 px-2 py-1 rounded">Planejado Q1</span>
+             </div>
 
-              <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col items-center opacity-60">
-                 <div className="p-3 bg-yellow-500/10 rounded-lg text-yellow-400 mb-4">
-                    <Zap size={24} />
-                 </div>
-                 <h3 className="text-white font-bold mb-2">Auto-Update</h3>
-                 <p className="text-gray-500 text-sm">Se a lei mudar, te avisamos e atualizamos seu documento automaticamente.</p>
-                 <span className="mt-4 text-xs font-mono text-gray-500 bg-white/5 px-2 py-1 rounded">Planejado Q2</span>
-              </div>
+             <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col items-center opacity-60">
+                <div className="p-3 bg-yellow-500/10 rounded-lg text-yellow-400 mb-4">
+                   <Zap size={24} />
+                </div>
+                <h3 className="text-white font-bold mb-2">Auto-Update</h3>
+                <p className="text-gray-500 text-sm">Se a lei mudar, te avisamos e atualizamos seu documento automaticamente.</p>
+                <span className="mt-4 text-xs font-mono text-gray-500 bg-white/5 px-2 py-1 rounded">Planejado Q2</span>
+             </div>
            </div>
         </div>
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="py-24 px-6 border-t border-white/5">
+      <section id="faq" className="py-12 px-6 border-t border-white/5">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl font-title font-bold text-white mb-10 text-center">Perguntas Frequentes</h2>
           
@@ -450,3 +529,6 @@ export default function LandingPage() {
     </div>
   );
 }
+
+// Exporta o wrapper que lida com o estado de autenticação
+export default LandingPageAuthWrapper;
