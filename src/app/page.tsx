@@ -254,6 +254,11 @@ function LandingPageContent({ user }: { user: FirebaseUser | null }) {
           <div className="text-xs text-gray-700 max-w-lg mx-auto">
             AVISO LEGAL: O PolicyGen fornece modelos baseados em informações comuns. Não somos um escritório de advocacia e não fornecemos aconselhamento jurídico. O uso dos documentos é de sua responsabilidade.
           </div>
+          <div className="flex items-center gap-4 mb-4 text-sm font-medium text-gray-500">
+            <Link href="/terms-of-service" target="_blank" className="hover:text-white transition-colors">Termos de Serviço</Link>
+            <span className="text-gray-700">|</span>
+            <Link href="/privacy-policy" target="_blank" className="hover:text-white transition-colors">Política de Privacidade</Link>
+          </div>
           
           {/* TRUST TRIGGER: TECH STACK */}
           <div className="mt-8 flex flex-col items-center gap-2 text-xs text-gray-600">

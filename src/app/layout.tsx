@@ -29,6 +29,13 @@ export const metadata: Metadata = {
   title: "PolicyGen — Gerador Inteligente de Políticas Legais",
   description: "Gere documentos jurídicos completos com apoio de IA e conformidade legal real. Saída em Markdown.",
   
+  //metatag propriedade google
+  //<meta name="google-site-verification" content="nfMrvlyYCIRIAYfgcKfOqgz0MuWfnuCJPQLTGMDb2Fw" />
+  verification: {
+    google: 'nfMrvlyYCIRIAYfgcKfOqgz0MuWfnuCJPQLTGMDb2Fw', // Use o código que o Search Console te deu
+  },
+
+
   // Favicon/Ícones de Aplicativo
   icons: [
     { rel: 'icon', url: '/favicon.ico' },
